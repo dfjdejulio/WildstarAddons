@@ -19,7 +19,8 @@ local Generalist = {}
 -----------------------------------------------------------------------------------------------
 
 -- local kcrSelectedText = ApolloColor.new("UI_BtnTextHoloPressedFlyby")
--- local kcrNormalText = ApolloColor.new("UI_BtnTextHoloNormal")
+local kcrEnabledColor = ApolloColor.new("UI_BtnTextHoloNormal")
+local kcrDisabledColor = ApolloColor.new("Disabled")
 
 local altTooltip = "<P Font=\"CRB_InterfaceSmall\" TextColor=\"white\">%s</P>"
 
@@ -94,7 +95,7 @@ function Generalist:Init()
 	local bHasConfigureFunction = false
 	local strConfigureButtonText = ""
 	local tDependencies = {
-		-- "UnitOrPackageName",
+		-- unit or package names depended on go here
 	}
     Apollo.RegisterAddon(self, bHasConfigureFunction, strConfigureButtonText, tDependencies)
 end
@@ -116,15 +117,15 @@ function Generalist:OnDocLoaded()
 	if self.xmlDoc ~= nil and self.xmlDoc:IsLoaded() then
 	
 		-- Set up the main window
-	    self.wndMain = Apollo.LoadForm(self.xmlDoc, "GeneralistForm", nil, self)
+	    	self.wndMain = Apollo.LoadForm(self.xmlDoc, "GeneralistForm", nil, self)
 		if self.wndMain == nil then
 			Apollo.AddAddonErrorText(self, "Could not load the main window for some reason.")
 			return
 		end
 			
 		-- item list window
-		self.wndItemList = self.wndMain:FindChild("ItemList")
-	    self.wndMain:Show(false, true)
+		self.charList = self.wndMain:FindChild("CharList")
+	    	self.wndMain:Show(false, true)
 
 		-- if the xmlDoc is no longer needed, you should set it to nil
 		-- self.xmlDoc = nil
@@ -132,6 +133,8 @@ function Generalist:OnDocLoaded()
 		-- Register handlers for events, slash commands and timer, etc.
 		-- e.g. Apollo.RegisterEventHandler("KeyDown", "OnKeyDown", self)
 		Apollo.RegisterSlashCommand("gen", "OnGeneralistOn", self)
+		-- Apollo.RegisterEventHandler("Tradeskills_Learned", "GetTradeskills", self)
+		Apollo.RegisterEventHandler("LogOut", "UpdateCurrentCharacter", self)
 		
 		-- Get ourselves into the Interface menu
 		Apollo.RegisterEventHandler("InterfaceMenuListHasLoaded", "OnInterfaceMenuListHasLoaded", self)
@@ -208,14 +211,14 @@ function Generalist:PopulateCharList()
 	self:DestroyCharList()
 	
 	-- next, add the current character to the table, and/or update its data
-	self:AddCurrentCharacter()
+	self:UpdateCurrentCharacter()
 	
 	-- Get the current character's faction
 	local factID = GameLib.GetPlayerUnit():GetFaction()
 	
 	-- Build list of characters of this faction
 	local a = {}
-    for name in pairs(self.altData) do
+    	for name in pairs(self.altData) do
 		-- Only add characters of this faction to the list
 		if self.altData[name].faction == factID then
 			table.insert(a, name)
@@ -226,9 +229,9 @@ function Generalist:PopulateCharList()
     table.sort(a)
 	
 	-- Now loop through the table of data and add all characters to the list item
-	--
 	local totalCash = 0
-	local counter
+	local totalLevel = 0
+	local cc
 	local name
 	for counter, name in ipairs(a) do
 		self:AddEntry(name,counter)
@@ -237,14 +240,25 @@ function Generalist:PopulateCharList()
 		if self.altData[name].cash ~= nil then
 			totalCash = totalCash + self.altData[name].cash
 		end
-
+		
+		-- And level
+		totalLevel = totalLevel + self.altData[name].level
+		
+		cc = counter
 	end
 	
-	-- Update the total cash display
-	self.wndMain:FindChild("TotalCash"):SetAmount(totalCash,true)
-			
+	-- Now, add the total cash entry
+	cc = cc+1
+	local wnd = Apollo.LoadForm(self.xmlDoc, "CharListEntry", self.charList, self)
+	self.tItems[cc] = wnd
+	wnd:FindChild("CharGold"):SetAmount(totalCash,true)
+	wnd:FindChild("CharLevel"):SetText(totalLevel)
+	wnd:FindChild("CharName"):SetText("[Total]")
+	wnd:FindChild("CharClass"):Show(false)
+	wnd:FindChild("CharPath"):Show(false)
+				
 	-- now all the item are added, call ArrangeChildrenVert to list out the list items vertically
-	self.wndItemList:ArrangeChildrenVert()
+	self.charList:ArrangeChildrenVert()
 end
 
 -- clear the item list
@@ -264,7 +278,7 @@ end
 --
 function Generalist:AddEntry(name,i)
 	-- load the window item for the list item
-	local wnd = Apollo.LoadForm(self.xmlDoc, "ListItem", self.wndItemList, self)
+	local wnd = Apollo.LoadForm(self.xmlDoc, "CharListEntry", self.charList, self)
 	
 	-- keep track of the window item created
 	self.tItems[i] = wnd
@@ -281,25 +295,30 @@ function Generalist:AddEntry(name,i)
 		--wndItemText:SetTextColor(kcrNormalText)
 		
 		-- Character's Level
-		wnd:FindChild("PlayerLevel"):SetText(tostring(entry.level))
+		wnd:FindChild("CharLevel"):SetText(tostring(entry.level))
 		
 		-- Character's Class, as icon with tooltip
-		wnd:FindChild("PlayerClass"):SetSprite(altClassToIcon[entry.class])
+		wnd:FindChild("CharClass"):SetSprite(altClassToIcon[entry.class])
 		if altClassToString[entry.class] ~= nil then
-			wnd:FindChild("PlayerClass"):SetTooltip(string.format(altTooltip, altClassToString[entry.class]))
+			wnd:FindChild("CharClass"):SetTooltip(string.format(altTooltip, altClassToString[entry.class]))
 		end
 			
 		-- Character's Gold
 		if entry.cash ~= nil then
-			wnd:FindChild("PlayerGold"):SetAmount(entry.cash, true)
+			wnd:FindChild("CharGold"):SetAmount(entry.cash, true)
 		else
-			wnd:FindChild("PlayerGold"):Show(false)
+			wnd:FindChild("CharGold"):Show(false)
+		end
+		
+		-- Character's zone
+		if entry.zone ~= nil then
+			wnd:FindChild("CharZone"):SetText(entry.zone)
 		end
 		
 		-- Character's Path
-		wnd:FindChild("PlayerPath"):SetSprite(altPathToIcon[entry.path])
+		wnd:FindChild("CharPath"):SetSprite(altPathToIcon[entry.path])
 		if altPathToString[entry.path] ~= nil then
-			wnd:FindChild("PlayerPath"):SetTooltip(string.format(altTooltip, altPathToString[entry.path]))
+			wnd:FindChild("CharPath"):SetTooltip(string.format(altTooltip, altPathToString[entry.path]))
 		end
 		
 	end
@@ -309,7 +328,7 @@ end
 -----------------------------------------------------------------------------------------------
 -- Add the current character to the data structure and update their info
 -----------------------------------------------------------------------------------------------
-function Generalist:AddCurrentCharacter()
+function Generalist:UpdateCurrentCharacter()
 
 	-- Get the current character's name
 	--
@@ -319,6 +338,10 @@ function Generalist:AddCurrentCharacter()
 	-- Is there an entry for this player in the table?
 	-- Add an empty entry if not.
 	--
+	if self.altData == nil then
+		self.altData = {}
+	end
+
 	if self.altData[myName] == nil then
 		self.altData[myName] = {}
 	end
@@ -330,6 +353,7 @@ function Generalist:AddCurrentCharacter()
 	self.altData[myName].class   = unitPlayer:GetClassId()
 	self.altData[myName].path    = PlayerPathLib.GetPlayerPathType()
 	self.altData[myName].cash    = GameLib.GetPlayerCurrency():GetAmount()
+	self.altData[myName].zone    = GetCurrentZoneName()
 
 	-- Update the player's list of unlocked AMPs.
 	self:GetUnlockedAmps(myName)
@@ -454,26 +478,69 @@ function Generalist:GetUnlockedAmps(myName)
 end
 
 function Generalist:GetTradeskills(myName)
-	local ts = {}
-	local schem = {}
-	local tsk = CraftingLib:GetKnownTradeskills()
-	for _,tSkill in ipairs(tsk) do
-		table.insert(ts, tSkill)
-		-- Print( "adding skill: " ..  tSkill.strName .. " (" .. tSkill.eId .. ")" )
-		schem[tSkill.eId] = CraftingLib.GetSchematicList(tSkill.eId)
+
+	-- Schematics table
+	if self.altData[myName].schematics == nil then
+		self.altData[myName].schematics = {}
 	end
 	
+	-- Table of skill active/not active
+	if self.altData[myName].skillActive == nil then
+		self.altData[myName].skillActive = {}
+	end
+		
+	-- Table of all my tradeskills
+	local ts = {}
+	
+	-- Get my tradeskills and loop through them
+	local tsk = CraftingLib:GetKnownTradeskills()
+	
+	-- Loop over the list
+	for _,tSkill in ipairs(tsk) do
+	
+		local id = tSkill.eId	
+
+		-- Add skill to table
+		table.insert(ts, tSkill)
+		-- Print( "adding skill: " ..  tSkill.strName .. " (" .. id .. ")" )
+		
+		-- Is the skill active?
+		local isActive = CraftingLib.GetTradeskillInfo(id).bIsActive
+		self.altData[myName].skillActive[id] = isActive
+			
+		-- Is this skill still active?
+		if isActive == true then
+	
+			-- Schematics for this skill
+			local skillSchem = CraftingLib.GetSchematicList(id)
+		
+			-- Sort them by their name
+			table.sort(skillSchem, function(a,b)
+				if a.strName ~= nil and b.strName ~= nil then
+					return a.strName < b.strName
+				else
+					return 0
+				end
+			end)
+			
+			-- Add list of schematics 
+			self.altData[myName].schematics[id] = skillSchem
+				
+			
+		else -- skill is not active
+			-- Print( "skill is inactive!" )
+			if self.altData[myName].schematics[tSkill.eId] ~= nil then
+			--	Print("but has schematics stored!")
+			end
+
+			
+		end -- whether tradeskill is active
+		
+	end
+	
+	-- And store the list
 	self.altData[myName].tradeSkills = ts
 	
-	-- Sort schematics and then save them
-	table.sort(schem, function(a,b)
-		if a.strName ~= nil and b.strName ~= nil then
-			return a.strName < b.strNam
-		else
-			return 0
-		end
-	end)
-	self.altData[myName].schematics = schem
 end
 
 function Generalist:GetCharEquipment(myName)
@@ -483,6 +550,26 @@ function Generalist:GetCharEquipment(myName)
 		equipment[itemEquipped:GetSlot()] = itemEquipped:GetItemId()
 	end 
 	self.altData[myName].equipment = equipment
+end
+
+-----------------------------------------------------------------------------------------------
+-- Generate a Chat Link
+-----------------------------------------------------------------------------------------------
+function Generalist:OnGenerateItemLink(wndHandler,wndControl)
+    -- make sure the wndControl is valid
+    if wndHandler ~= wndControl then
+        return
+    end
+
+	local tItem
+	
+	if wndHandler:GetData() ~= nil then
+		tItem = Item.GetDataFromId(wndHandler:GetData())
+	end
+	
+	-- the item in question is now "tItem", and all we have to do is fire the event
+	Event_FireGenericEvent("ItemLink", tItem)
+	
 end
 
 -----------------------------------------------------------------------------------------------
@@ -506,6 +593,11 @@ function Generalist:OnListItemSelected(wndHandler, wndControl)
     -- Who was picked?
 	local wndItemText = wndControl:FindChild("CharName")
 	local charName = wndItemText:GetText()
+	
+	-- If we picked the empty one (total cash row), bail out
+	if charName == "[Total]" then
+		return
+	end
 
 	-- Set up everything in the detail window
 	self:PopulateDetailWindow(charName)
@@ -540,7 +632,7 @@ function Generalist:PopulateDetailWindow(charName)
 	
 	-- Character's Level
 	self.wndDetail:FindChild("PlayerLevel"):SetText("Level " .. tostring(entry.level))
-		
+			
 	-- Character's Class, as icon with tooltip
 	self.wndDetail:FindChild("PlayerClass"):SetSprite(altClassToIcon[entry.class])
 	if altClassToString[entry.class] ~= nil then
@@ -582,15 +674,22 @@ function Generalist:PopulateDetailWindow(charName)
 				
 			-- Set the button's data and text to the skill's eId/strName
 			wndCurr:SetData(skill.eId)
-			wndCurr:SetText(skill.strName)
+			
+			-- Append "Inactive" if the skill is not active
+			local skillTitle = skill.strName
+			if entry.skillActive[skill.eId] == false then
+				wndCurr:SetText(skillTitle .. " (Inactive) ")
+				wndCurr:SetTextColor(kcrDisabledColor)
+			else
+				wndCurr:SetText(skillTitle)
+				wndCurr:SetTextColor(kcrEnabledColor)
+			end
 		end
 	end
 	
 	self.wndDetail:FindChild("TradeskillPickerList"):ArrangeChildrenVert()
 	
 	-- Character's equipment
-	--
-	--Print ("Equipment has " .. table.getn(entry.equipment) .. " entries")
 	if entry.equipment == nil then entry.equipment = {} end
 	
 	for key, id in pairs(entry.equipment) do
@@ -606,6 +705,9 @@ function Generalist:PopulateDetailWindow(charName)
 			
 			-- Set the icon
 			slot:SetSprite(itemData:GetIcon())
+			
+			-- Set the data for the slot control so we can get links
+			slot:SetData(id)
 			
 			-- Clear the tooltip
 			slot:SetTooltipDoc(nil)
@@ -648,23 +750,6 @@ function Generalist:OpenSearch( wndHandler, wndControl, eMouseButton )
 end
 
 -----------------------------------------------------------------------------------------------
--- Create a new tab of the details window
------------------------------------------------------------------------------------------------
-function Generalist:NewDetailTab(strTitle)
-
-	local newTab = Apollo.LoadForm(self.xmlDoc, "DetailTabs", self.wndDetail, self)
-	if newTab == nil then
-		Apollo.AddAddonErrorText(self, "Could not create the new tab for some reason.")
-		return
-	end
-	
-	newTab:SetText(strTitle)
-	newTab:Show(true)
-	
-	return newTab	
-end
-
------------------------------------------------------------------------------------------------
 -- Saving and loading our data
 -----------------------------------------------------------------------------------------------
 function Generalist:OnSave(eLevel)
@@ -685,6 +770,14 @@ function Generalist:OnRestore(eLevel, tData)
 	
 	-- And load this into our data structure
 	self.altData = tData
+	
+	if self.altData == nil then
+		self.altData = {}
+	end
+
+
+	-- Load up the current character
+	self:UpdateCurrentCharacter()
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -742,6 +835,9 @@ function Generalist:OnTradeskillPickerBtn( wndHandler, wndControl, eMouseButton 
 				local itemData = Item.GetDataFromId(amp.nItemIdUnlock)
 				local icon = wnd:FindChild("ItemIcon")
 				icon:SetSprite(itemData:GetIcon())
+				
+				-- And clickability
+				wnd:SetData(amp.nItemIdUnlock)
 					
 				-- And its tooltip
 				icon:SetTooltipDoc(nil)
@@ -751,7 +847,7 @@ function Generalist:OnTradeskillPickerBtn( wndHandler, wndControl, eMouseButton 
 			
 		else -- no amps unlocked
 			local wnd = Apollo.LoadForm(self.xmlDoc, "NoSchematicKnown", recList, self)
-			wnd:FindChild("ItemName"):SetText("(No AMPs unlocked)")
+			wnd:SetText("(No AMPs unlocked)")
 		end
 		
 	else -- schematics rather than amps
@@ -783,6 +879,16 @@ function Generalist:OnTradeskillPickerBtn( wndHandler, wndControl, eMouseButton 
 				local itemData = Item.GetDataFromId(itemId)
 				local icon = wnd:FindChild("ItemIcon")
 				icon:SetSprite(itemData:GetIcon())
+				
+				-- And clickability
+				wnd:SetData(itemId)
+							
+				-- Set color based on enabledness of skill
+				if entry.skillActive[pickedSkill] == false then
+					wnd:FindChild("ItemName"):SetTextColor(kcrDisabledColor)
+				else
+					wnd:FindChild("ItemName"):SetTextColor(kcrEnabledColor)
+				end
 					
 				-- And its tooltip
 				icon:SetTooltipDoc(nil)
@@ -803,7 +909,7 @@ end
 
 function Generalist:OnInterfaceMenuListHasLoaded()
 	Event_FireGenericEvent("InterfaceMenuList_NewAddOn", "Generalist", 
-		{"ToggleGeneralist", "", "GeneralistInterfaceSprite"})
+		{"ToggleGeneralist", "", "ChatLogSprites:CombatLogSaveLogBtnNormal"})
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -876,6 +982,9 @@ function Generalist:GeneralistSearchSubmitted( wndHandler, wndControl, eMouseBut
 					local icon = wnd:FindChild("ItemIcon")
 					icon:SetSprite(itemData:GetIcon())
 					
+					-- Important!  Set the data of the object to contain item ID.
+					wnd:SetData(id)
+					
 					-- And its tooltip
 					icon:SetTooltipDoc(nil)
 					Tooltip.GetItemTooltipForm(self, icon, itemData, {bPrimary = true, bSelling = false})
@@ -891,6 +1000,63 @@ function Generalist:GeneralistSearchSubmitted( wndHandler, wndControl, eMouseBut
 	-- now all the item are added, call ArrangeChildrenVert to list out the list items vertically
 	resList:ArrangeChildrenVert()
 
+end
+
+
+
+---------------------------------------------------------------------------------------------------
+-- Delete an alt
+---------------------------------------------------------------------------------------------------
+
+function Generalist:OnForgetButtonPushed( wndHandler, wndControl, eMouseButton )
+
+	if wndHandler ~= wndControl then
+		return
+	end
+	
+	-- Confirmation dialog
+	self.wndDetail:FindChild("ForgetConfirm"):Show(true)
+	
+end
+
+---------------------------------------------------------------------------------------------------
+-- DetailForm Functions
+---------------------------------------------------------------------------------------------------
+
+function Generalist:OnForgetConfirmNo( wndHandler, wndControl, eMouseButton )
+
+	if wndHandler ~= wndControl then
+		return
+	end
+	
+	self.wndDetail:FindChild("ForgetConfirm"):Show(false)
+	
+end
+
+function Generalist:OnForgetConfirmYes( wndHandler, wndControl, eMouseButton )
+
+	if wndHandler ~= wndControl then
+		return
+	end
+
+	-- Name of the alt to forget
+	local forgetName = self.detailOpen
+	
+	-- Hide the confirm dialog again
+	self.wndDetail:FindChild("ForgetConfirm"):Show(false)
+	
+	-- Close the details window
+	self.wndDetail:Close()
+	self.detailOpen = false
+	
+	-- Forget the alt
+	self.altData[forgetName] = nil
+	
+	-- Repopulate the character list
+	self:PopulateCharList()
+	
+	-- and we're done!
+	
 end
 
 -----------------------------------------------------------------------------------------------
