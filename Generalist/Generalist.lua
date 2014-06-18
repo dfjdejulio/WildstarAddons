@@ -76,6 +76,8 @@ local altPathToString = {
 	[PlayerPathLib.PlayerPathType_Scientist] = Apollo.GetString("PlayerPathScientist"),
 }
 
+local origItemToolTipForm = nil
+
 -----------------------------------------------------------------------------------------------
 -- Initialization
 -----------------------------------------------------------------------------------------------
@@ -86,8 +88,9 @@ function Generalist:new(o)
 
     -- initialize variables here
 	o.tItems = {} -- keep track of all the list items
+	o.altData = {}
 	-- o.wndSelectedListItem = nil -- keep track of which list item is currently selected
-
+	
     return o
 end
 
@@ -107,6 +110,29 @@ function Generalist:OnLoad()
     -- load our form file
 	self.xmlDoc = XmlDoc.CreateFromFile("Generalist.xml")
 	self.xmlDoc:RegisterCallback("OnDocLoaded", self)
+		
+	-- init hook for tooltips
+	local TT = Apollo.GetAddon("ToolTips")
+	
+	-- Preserve the original callbacks call
+	local origCreateCallNames = TT.CreateCallNames
+	
+	-- And then create  new callbacks
+	TT.CreateCallNames = function(luaCaller)
+	
+		-- First, call the orignal function to create the original callbacks
+		origCreateCallNames(luaCaller)
+		
+		-- Save the original form
+		origItemToolTipForm = Tooltip.GetItemTooltipForm
+		
+		-- Now create a new callback function for the item form
+		Tooltip.GetItemTooltipForm = function(luaCaller, wndControl, item, bStuff, nCount)
+			return self.ItemToolTip(luaCaller,wndControl,item,bStuff,nCount)
+		end
+		
+	end
+		
 end
 
 -----------------------------------------------------------------------------------------------
@@ -117,38 +143,62 @@ function Generalist:OnDocLoaded()
 	if self.xmlDoc ~= nil and self.xmlDoc:IsLoaded() then
 	
 		-- Set up the main window
-	    	self.wndMain = Apollo.LoadForm(self.xmlDoc, "GeneralistForm", nil, self)
+	    self.wndMain = Apollo.LoadForm(self.xmlDoc, "GeneralistForm", nil, self)
 		if self.wndMain == nil then
 			Apollo.AddAddonErrorText(self, "Could not load the main window for some reason.")
 			return
-		end
-			
+		end	
+		
 		-- item list window
 		self.charList = self.wndMain:FindChild("CharList")
-	    	self.wndMain:Show(false, true)
+		
+		-- keep the main window hidden for now
+	    self.wndMain:Show(false, true)
 
 		-- if the xmlDoc is no longer needed, you should set it to nil
 		-- self.xmlDoc = nil
 		
+		-- Register the slash command
+		Apollo.RegisterSlashCommand("gen", "OnGeneralistOn", self)
+		
 		-- Register handlers for events, slash commands and timer, etc.
 		-- e.g. Apollo.RegisterEventHandler("KeyDown", "OnKeyDown", self)
-		Apollo.RegisterSlashCommand("gen", "OnGeneralistOn", self)
-		-- Apollo.RegisterEventHandler("Tradeskills_Learned", "GetTradeskills", self)
+		
+		-- Update my info on logout
 		Apollo.RegisterEventHandler("LogOut", "UpdateCurrentCharacter", self)
 		
 		-- Get ourselves into the Interface menu
 		Apollo.RegisterEventHandler("InterfaceMenuListHasLoaded", "OnInterfaceMenuListHasLoaded", self)
 		Apollo.RegisterEventHandler("ToggleGeneralist", "OnGeneralistOn", self)
 
-		-- doesn't really need a timer, I think
-		-- self.timer = ApolloTimer.Create(1.0, true, "OnTimer", self)
-
+		-- Finally, add the current character to the table, and update its data
+		self:UpdateCurrentCharacter()
 	end
 end
 
+---------------------------------------------------------------------------------------------------
+-- Add us to interface menu
+---------------------------------------------------------------------------------------------------
+
+function Generalist:OnInterfaceMenuListHasLoaded()
+	Event_FireGenericEvent("InterfaceMenuList_NewAddOn", "Generalist", 
+		{"ToggleGeneralist", "", "ChatLogSprites:CombatLogSaveLogBtnNormal"})
+end
 
 -----------------------------------------------------------------------------------------------
--- Close window button functions.  As simple as they get.
+-- Main slash command (or clicking us in the interface window)
+-----------------------------------------------------------------------------------------------
+
+-- on SlashCommand "/gen"
+function Generalist:OnGeneralistOn()
+	self.wndMain:Invoke() -- show the window
+		
+	-- populate the character list
+	self:PopulateCharList()
+end
+
+-----------------------------------------------------------------------------------------------
+-- Close window button functions.  
 -----------------------------------------------------------------------------------------------
 
 function Generalist:OnCancel()
@@ -178,28 +228,6 @@ function Generalist:OnSearchClose()
 	self.wndSearch:Close()
 	-- And mark that it's closed, so we can open another
 	self.searchOpen = nil
-end
-
------------------------------------------------------------------------------------------------
--- Generalist Functions
------------------------------------------------------------------------------------------------
-
--- on SlashCommand "/gen"
-function Generalist:OnGeneralistOn()
-	self.wndMain:Invoke() -- show the window
-	
-	-- if altData doesn't exist yet, create empty hash
-	if self.altData == nil then
-		self.altData = {}
-	end
-	
-	-- populate the character list
-	self:PopulateCharList()
-end
-
--- on timer
-function Generalist:OnTimer()
-	-- Do your timer-related stuff here.
 end
 
 -----------------------------------------------------------------------------------------------
@@ -311,9 +339,7 @@ function Generalist:AddEntry(name,i)
 		end
 		
 		-- Character's zone
-		if entry.zone ~= nil then
-			wnd:FindChild("CharZone"):SetText(entry.zone)
-		end
+		wnd:FindChild("CharZone"):SetText(entry.zone)
 		
 		-- Character's Path
 		wnd:FindChild("CharPath"):SetSprite(altPathToIcon[entry.path])
@@ -333,14 +359,16 @@ function Generalist:UpdateCurrentCharacter()
 	-- Get the current character's name
 	--
 	local unitPlayer = GameLib.GetPlayerUnit()
+	
+	-- If we don't have a current player, return
+	if unitPlayer == nil then return end
+	
 	local myName = unitPlayer:GetName()
+	-- Print ("updating for " .. myName)
 	
 	-- Is there an entry for this player in the table?
 	-- Add an empty entry if not.
 	--
-	if self.altData == nil then
-		self.altData = {}
-	end
 
 	if self.altData[myName] == nil then
 		self.altData[myName] = {}
@@ -478,17 +506,18 @@ function Generalist:GetUnlockedAmps(myName)
 end
 
 function Generalist:GetTradeskills(myName)
-
+	
 	-- Schematics table
 	if self.altData[myName].schematics == nil then
 		self.altData[myName].schematics = {}
 	end
+
+	-- Table of active/inactive skills
+	local activityTable = {}
 	
-	-- Table of skill active/not active
-	if self.altData[myName].skillActive == nil then
-		self.altData[myName].skillActive = {}
-	end
-		
+	-- Table of skill tiers
+	local tierTable = {}
+			
 	-- Table of all my tradeskills
 	local ts = {}
 	
@@ -502,11 +531,13 @@ function Generalist:GetTradeskills(myName)
 
 		-- Add skill to table
 		table.insert(ts, tSkill)
-		-- Print( "adding skill: " ..  tSkill.strName .. " (" .. id .. ")" )
 		
 		-- Is the skill active?
 		local isActive = CraftingLib.GetTradeskillInfo(id).bIsActive
-		self.altData[myName].skillActive[id] = isActive
+		activityTable[id] = isActive
+		
+		-- Tier?
+		tierTable[id] = CraftingLib.GetTradeskillInfo(id).eTier
 			
 		-- Is this skill still active?
 		if isActive == true then
@@ -528,9 +559,8 @@ function Generalist:GetTradeskills(myName)
 				
 			
 		else -- skill is not active
-			-- Print( "skill is inactive!" )
 			if self.altData[myName].schematics[tSkill.eId] ~= nil then
-			--	Print("but has schematics stored!")
+			
 			end
 
 			
@@ -541,13 +571,21 @@ function Generalist:GetTradeskills(myName)
 	-- And store the list
 	self.altData[myName].tradeSkills = ts
 	
+	-- Store activity table
+	self.altData[myName].skillActive = activityTable
+	
+	-- Store tier table
+	self.altData[myName].skillTier = tierTable
+	
 end
 
 function Generalist:GetCharEquipment(myName)
 	local eq = GameLib.GetPlayerUnit():GetEquippedItems()
 	local equipment = {}
+	self.altData[myName].fullItem = {}
 	for key, itemEquipped in pairs(eq) do
 		equipment[itemEquipped:GetSlot()] = itemEquipped:GetItemId()
+		self.altData[myName].fullItem[itemEquipped:GetSlot()] = itemEquipped
 	end 
 	self.altData[myName].equipment = equipment
 end
@@ -607,8 +645,7 @@ function Generalist:OnListItemSelected(wndHandler, wndControl)
 	
 	-- Flag that the detail window is open by setting detailOpen to the char
 	self.detailOpen = charName
-		    
-	-- Print( "item " ..  self.wndSelectedListItem:GetData() .. " is selected.")
+
 end
 
 -----------------------------------------------------------------------------------------------
@@ -690,13 +727,10 @@ function Generalist:PopulateDetailWindow(charName)
 	self.wndDetail:FindChild("TradeskillPickerList"):ArrangeChildrenVert()
 	
 	-- Character's equipment
-	if entry.equipment == nil then entry.equipment = {} end
-	
+
 	for key, id in pairs(entry.equipment) do
 	
 		local itemData = Item.GetDataFromId(id)
-		
-		--Print ( key .. ": " .. itemData:GetName() )
 		
 		if genSlotFromId[key] ~= nil then
 		
@@ -713,8 +747,8 @@ function Generalist:PopulateDetailWindow(charName)
 			slot:SetTooltipDoc(nil)
 			
 			-- And generate the tooltip
-			Tooltip.GetItemTooltipForm(self, slot, itemData, {bPrimary = true, bSelling = false})
-		
+			--Tooltip.GetItemTooltipForm(self, slot, itemData, {bPrimary = true, bSelling = false})
+			slot:SetTooltipForm(self.dummyTooltip)		
 		end
 		
 	end -- of loop through equipment
@@ -771,13 +805,61 @@ function Generalist:OnRestore(eLevel, tData)
 	-- And load this into our data structure
 	self.altData = tData
 	
-	if self.altData == nil then
-		self.altData = {}
+	-- Loop through each character and add empty tables
+	-- for backwards compatibility.
+	for charName in pairs(self.altData) do
+		Print ("Now updating " .. charName )
+		self:EnsureBackwardsCompatibility(charName)
 	end
+	
+end
 
+---------------------------------------------------------------------------------------------------
+-- Ensure backwards compatibility by adding empty arrays.
+---------------------------------------------------------------------------------------------------
 
-	-- Load up the current character
-	self:UpdateCurrentCharacter()
+function Generalist:EnsureBackwardsCompatibility(myName)
+
+	-- Schematics table
+	if self.altData[myName].schematics == nil then
+		self.altData[myName].schematics = {}
+	end
+	
+	-- Tradeskills table
+	if self.altData[myName].tradeSkills == nil then
+		self.altData[myName].tradeSkills = {}
+	end
+	
+	-- Table of skill active/not active
+	if self.altData[myName].skillActive == nil then
+		self.altData[myName].skillActive = {}
+	end
+	
+	-- Table of skill tiers
+	if self.altData[myName].skillTier == nil then
+		self.altData[myName].skillTier = {}
+	end
+	
+	-- Equipment
+	if self.altData[myName].equipment == nil then
+		self.altData[myName].equipment = {}
+	end
+	
+	-- Inventory
+	if self.altData[myName].inventory == nil then
+		self.altData[myName].inventory = {}
+	end
+	
+	-- Unlocked
+	if self.altData[myName].inventory == nil then
+		self.altData[myName].inventory = {}
+	end
+	
+	-- Zone
+	if self.altData[myName].zone == nil then
+		self.altData[myName].zone = '(Unknown location)'
+	end
+	
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -810,8 +892,7 @@ function Generalist:OnTradeskillPickerBtn( wndHandler, wndControl, eMouseButton 
 	-- Did they want to see unlocked AMPs?
 	if pickedSkill == 'amps' then
 
-		if entry.unlocked ~= nil and table.getn(entry.unlocked) > 0 
-			and entry.unlocked[1].strTitle ~= nil then
+		if table.getn(entry.unlocked) > 0 then
 		
 			local unlocked = entry.unlocked
 
@@ -855,7 +936,7 @@ function Generalist:OnTradeskillPickerBtn( wndHandler, wndControl, eMouseButton 
 		-- get the schematics for the desired tradeskill
 		local schematics
 
-		if entry.schematics ~= nil and entry.schematics[pickedSkill] ~= nil then
+		if entry.schematics[pickedSkill] ~= nil then
 			 schematics = entry.schematics[pickedSkill]
 		end
 	
@@ -907,11 +988,6 @@ function Generalist:OnTradeskillPickerBtn( wndHandler, wndControl, eMouseButton 
 	
 end
 
-function Generalist:OnInterfaceMenuListHasLoaded()
-	Event_FireGenericEvent("InterfaceMenuList_NewAddOn", "Generalist", 
-		{"ToggleGeneralist", "", "ChatLogSprites:CombatLogSaveLogBtnNormal"})
-end
-
 ---------------------------------------------------------------------------------------------------
 -- The Search Function
 ---------------------------------------------------------------------------------------------------
@@ -949,51 +1025,45 @@ function Generalist:GeneralistSearchSubmitted( wndHandler, wndControl, eMouseBut
 		-- The alt's inventory
 		local theInv = self.altData[charName].inventory
 		
-		-- Inventory might be nil (unlikely but possible)
+		-- Loop through the items
+		--
+		for id, info in pairs(theInv) do
 		
-		if theInv ~= nil then
-		
-			-- Loop through the items
-			--
-			for id, info in pairs(theInv) do
-		
-				if string.find(string.lower(info.name),needle) ~= nil then
+			if string.find(string.lower(info.name),needle) ~= nil then
 			
-					-- We found it!  Create an entry as a child of the result list.
-					local wnd = Apollo.LoadForm(self.xmlDoc, "SearchResult", resList, self)
-					wnd:FindChild("ItemChar"):SetText(charName)
-					wnd:FindChild("ItemName"):SetText(info.name)
-					wnd:FindChild("ItemCount"):SetText(info.count)
+				-- We found it!  Create an entry as a child of the result list.
+				local wnd = Apollo.LoadForm(self.xmlDoc, "SearchResult", resList, self)
+				wnd:FindChild("ItemChar"):SetText(charName)
+				wnd:FindChild("ItemName"):SetText(info.name)
+				wnd:FindChild("ItemCount"):SetText(info.count)
 					
-					-- And the location
-					if info.location == nil then
-						wnd:FindChild("ItemPlace"):SetText("(Unknown)")
-					else
-						local locs = {}
-						if bit32.band(4, info.location) == 4 then table.insert(locs,"Equipped") end
-						if bit32.band(1, info.location) == 1 then table.insert(locs,"Inventory") end
-						if bit32.band(2, info.location) == 2 then table.insert(locs,"Tradeskill") end
-						local places = table.concat(locs,", ")
-						wnd:FindChild("ItemPlace"):SetText(places)
-					end
+				-- And the location
+				if info.location == nil then
+					wnd:FindChild("ItemPlace"):SetText("(Unknown)")
+				else
+					local locs = {}
+					if bit32.band(4, info.location) == 4 then table.insert(locs,"Equipped") end
+					if bit32.band(1, info.location) == 1 then table.insert(locs,"Inventory") end
+					if bit32.band(2, info.location) == 2 then table.insert(locs,"Tradeskill") end
+					local places = table.concat(locs,", ")
+					wnd:FindChild("ItemPlace"):SetText(places)
+				end
 				
-					-- And the icon
-					local itemData = Item.GetDataFromId(id)
-					local icon = wnd:FindChild("ItemIcon")
-					icon:SetSprite(itemData:GetIcon())
+				-- And the icon
+				local itemData = Item.GetDataFromId(id)
+				local icon = wnd:FindChild("ItemIcon")
+				icon:SetSprite(itemData:GetIcon())
 					
-					-- Important!  Set the data of the object to contain item ID.
-					wnd:SetData(id)
+				-- Important!  Set the data of the object to contain item ID.
+				wnd:SetData(id)
 					
-					-- And its tooltip
-					icon:SetTooltipDoc(nil)
-					Tooltip.GetItemTooltipForm(self, icon, itemData, {bPrimary = true, bSelling = false})
+				-- And its tooltip
+				icon:SetTooltipDoc(nil)
+				Tooltip.GetItemTooltipForm(self, icon, itemData, {bPrimary = true, bSelling = false})
 			
-				end -- of what to do if we find a match
+			end -- of what to do if we find a match
 		
-			end -- of loop through items in the alt's inventory
-			
-		end -- of what to do if the alt has an inventory
+		end -- of loop through items in the alt's inventory
 	
 	end -- of loop through alts
 	
@@ -1002,10 +1072,233 @@ function Generalist:GeneralistSearchSubmitted( wndHandler, wndControl, eMouseBut
 
 end
 
+---------------------------------------------------------------------------------------------------
+-- Tooltip Hook
+---------------------------------------------------------------------------------------------------
 
+function Generalist:ItemToolTip(wndControl, item, bStuff, nCount)
+	local this = Apollo.GetAddon("Generalist")
+	
+	wndControl:SetTooltipDoc(nil)
+	local wndTooltip, wndTooltipComp = origItemToolTipForm(self,wndControl,item,bStuff,nCount)
+	
+	-- Add Generalist info about who has this thing.
+	this:AddTooltipInfo(wndControl, wndTooltip, item)
+	
+	return wndTooltip, wndTooltipComp
+	
+end
+
+function Generalist:AddTooltipInfo(wndParent, wndTooltip, item)
+	local wndInv = Apollo.LoadForm(self.xmlDoc, "TooltipInventorySummary",
+		wndTooltip:FindChild("Items"), self)
+	local wndList = wndInv:FindChild("TooltipInventoryList")
+		
+	-- Now we loop through everyone's inventory to find matches.
+	
+	-- Get the current character's faction
+	local factID = GameLib.GetPlayerUnit():GetFaction()
+	
+	-- Build list of characters of this faction
+	local a = {}
+    for name in pairs(self.altData) do
+		-- Only add characters of this faction to the list
+		if self.altData[name].faction == factID then
+			table.insert(a, name)
+		end
+	end
+	
+	-- Sort the list to make results a little saner to read.
+	table.sort(a)
+	
+	-- Get the item's ID
+	local id = item:GetItemId()
+
+	-- Count how many of the item we have across everyone
+	local totalCount = 0
+	
+	-- And count how many alts had it.  If more than 1, report total.
+	local totalAltsHave = 0
+	
+	-- Now loop through all the characters of this faction.
+	--
+	for _,charName in ipairs(a) do
+	
+		-- The alt's inventory
+		local theInv = self.altData[charName].inventory
+		
+		-- Inventory might be nil (unlikely but possible)!
+		-- But if the item'd ID	exists as a key, we've found it.
+		if theInv[id] ~= nil then
+		
+			local invItem = Apollo.LoadForm(self.xmlDoc, "TooltipInventoryItem",
+				wndList, self)
+			local info = theInv[id]
+			local itemString = charName .. ": " .. info.count
+			
+			-- And increase the number of alts who have, and the total.
+			totalCount = totalCount + info.count
+			totalAltsHave = totalAltsHave + 1
+				
+			-- And the location
+			if info.location ~= nil then
+				local locs = {}
+				if bit32.band(4, info.location) == 4 then table.insert(locs,"Equipped") end
+				if bit32.band(1, info.location) == 1 then table.insert(locs,"Inventory") end
+				if bit32.band(2, info.location) == 2 then table.insert(locs,"Tradeskill") end
+				local places = table.concat(locs,", ")
+				itemString = itemString .. " (" .. places .. ")"
+			end
+			
+			invItem:SetText("<T TextColor=\"green\">" .. itemString .. "</T>")
+			invItem:SetHeightToContentHeight()
+			
+		end -- of whether that alt has the item
+		
+	end -- of list through faction's alts	
+	
+	-- Did more than one alt have some?
+	if totalAltsHave > 1 then
+		local invItem = Apollo.LoadForm(self.xmlDoc, "TooltipInventoryItem",
+			wndList, self)
+		local itemString = "(Total: " .. totalCount .. ")"
+		invItem:SetText("<T TextColor=\"green\">" .. itemString .. "</T>")
+		invItem:SetHeightToContentHeight()
+	end
+	
+	-- Now is this item an AMP which someone might know?
+	--
+	--if string.find(item:GetItemTypeName()," AMP") ~= nil then
+	if item:GetItemFamilyName() == 'AMP' then
+		-- Loop through characters
+		for _,charName in ipairs(a) do
+			-- Loop through their amps
+			local unlocked = self.altData[charName].unlocked
+			for _,amp in ipairs(unlocked) do
+				if amp.nItemIdUnlock == id then
+					-- It's a match!
+					local invItem = Apollo.LoadForm(self.xmlDoc,
+						"TooltipInventoryItem", wndList, self)
+					invItem:SetText("<T TextColor=\"red\">Already unlocked by " .. charName .. "</T>")
+					invItem:SetHeightToContentHeight()
+				end -- whether they unlocked this one amp
+			end -- loop through their amps	
+		end -- loop through alts
+	end -- if the tooltip is for an amp
+	
+	
+	-- Now is this item a schematic which someone might know?
+	--
+	--if string.find(item:GetItemTypeName()," AMP") ~= nil then
+	if item:GetItemFamilyName() == 'Schematic' then
+	
+		-- Get the name of the thing this schematic crafts
+		local theSpell = item:GetActivateSpell()
+		local theName = theSpell:GetName()
+		local theTier = theSpell:GetTradeskillRequirements().eTier
+		
+		-- Determine the skill associated with the schematic
+		-- This is ugly and I would love a cleaner way to do it,
+		-- but until I can get an API which tells me what the schematic's
+		-- internal ID is from the pattern-item, this is likely 
+		-- the best I can do.
+		local theSkillName = theSpell:GetTradeskillRequirements().strName
+		
+		local theSkill = CraftingLib.CodeEnumTradeskill[theSkillName]
+		
+		-- Super gross hack, because of a flaw in the table, where skill #16 is
+		-- named "Augmentor"
+		if theSkillName == "Technologist" then theSkill = 16 end
+		
+		-- Now chop off the beginning of the spell's name.
+		-- This is possibly the grossest bit.
+		--
+		local itemPos = 0
+		if string.find(theName,"Grants Schematic: ") then
+			itemPos = string.len("Grants Schematic: ")
+		elseif string.find(theName,"Grant Schematic: ") then
+			itemPos = string.len("Grant Schematic: ")
+		end
+		local itemCreated = string.sub(theName, itemPos + 1)
+		
+		-- Loop through characters
+		for _,charName in ipairs(a) do
+		
+			-- A few cleanups for sanity and backwards compatibility
+
+			-- Their schematics
+			local schematics = self.altData[charName].schematics[theSkill]
+			
+			-- Do they know any schematics of this skill?
+			if schematics ~= nil then
+
+				-- Did we find the item in this skill?
+				local foundInSkill = 0
+			
+				-- Now loop through them
+				for _,recipe in ipairs(schematics) do
+					local name = recipe.strName
+					--if theSkill == 16 then
+					--	Print( "Checking '" .. name .. "' versus '" .. itemCreated .. "'" )
+					--end
+					if name == itemCreated then
+						-- It's a match!
+						foundInSkill = 1
+						local invItem = Apollo.LoadForm(self.xmlDoc,
+							"TooltipInventoryItem", wndList, self)
+						invItem:SetText("<T TextColor=\"red\">Already known by " .. charName .. "</T>")
+						invItem:SetHeightToContentHeight()
+					end -- whether they know this recipe
+				end -- loop through recipes of this skill
+					
+				-- If we did not find it, AND the skill is active,
+				-- we should see if this alt
+				-- can learn the thing now or later.
+				--
+				if foundInSkill == 0 and 
+					self.altData[charName].skillActive[theSkill] == true then
+					
+					-- Special backwards compatibility, for pre 0.5.1,
+					-- to fill in tiers
+					if self.altData[charName].skillTier[theSkill] == nil then
+						self.altData[charName].skillTier[theSkill] = 1
+					end
+
+					-- Is the alt's tier in this skill equal to or greater than
+					-- the item's tier?
+					if self.altData[charName].skillTier[theSkill] >= theTier then
+						local invItem = Apollo.LoadForm(self.xmlDoc,
+							"TooltipInventoryItem", wndList, self)
+						invItem:SetText("<T TextColor=\"green\">Can be learned by " .. charName .. "</T>")
+						invItem:SetHeightToContentHeight()
+					else
+						local invItem = Apollo.LoadForm(self.xmlDoc,
+							"TooltipInventoryItem", wndList, self)
+						invItem:SetText("<T TextColor=\"yellow\">Will be learnable by " .. charName .. "</T>")
+						invItem:SetHeightToContentHeight()
+					end
+					
+				end -- if they did not already know it
+				
+			end -- whether they know any schematics	of this skill
+			
+		end -- loop through alts
+		
+	end -- if the tooltip is for a recipe
+		
+	-- Put our summary pane together and set its height
+	local wndHeight = wndList:ArrangeChildrenVert()
+	wndInv:SetAnchorOffsets(0, 0, 0, wndHeight)
+	
+	-- Rearrange the "items" in the tooltip to include the summary pane
+	wndTooltip:FindChild("Items"):ArrangeChildrenVert()
+	
+	-- And resize to fit
+	wndTooltip:Move(0, 0, wndTooltip:GetWidth(), wndTooltip:GetHeight()+wndHeight)
+end
 
 ---------------------------------------------------------------------------------------------------
--- Delete an alt
+-- Functions for forgetting an alt
 ---------------------------------------------------------------------------------------------------
 
 function Generalist:OnForgetButtonPushed( wndHandler, wndControl, eMouseButton )
@@ -1018,10 +1311,6 @@ function Generalist:OnForgetButtonPushed( wndHandler, wndControl, eMouseButton )
 	self.wndDetail:FindChild("ForgetConfirm"):Show(true)
 	
 end
-
----------------------------------------------------------------------------------------------------
--- DetailForm Functions
----------------------------------------------------------------------------------------------------
 
 function Generalist:OnForgetConfirmNo( wndHandler, wndControl, eMouseButton )
 
