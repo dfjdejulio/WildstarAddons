@@ -110,6 +110,9 @@ function Generalist:OnLoad()
     -- load our form file
 	self.xmlDoc = XmlDoc.CreateFromFile("Generalist.xml")
 	self.xmlDoc:RegisterCallback("OnDocLoaded", self)
+	
+	-- load our version info
+	self.version = XmlDoc.CreateFromFile("toc.xml"):ToTable().Version
 		
 	-- init hook for tooltips
 	local TT = Apollo.GetAddon("ToolTips")
@@ -154,6 +157,9 @@ function Generalist:OnDocLoaded()
 		
 		-- keep the main window hidden for now
 	    self.wndMain:Show(false, true)
+	
+		-- put the version number in the title bar
+		self.wndMain:FindChild("Backing"):FindChild("Title"):SetText("Generalist v" .. self.version)
 
 		-- if the xmlDoc is no longer needed, you should set it to nil
 		-- self.xmlDoc = nil
@@ -891,7 +897,6 @@ function Generalist:OnRestore(eLevel, tData)
 	-- Loop through each character and add empty tables
 	-- for backwards compatibility.
 	for charName in pairs(self.altData) do
-		Print ("Now updating " .. charName )
 		self:EnsureBackwardsCompatibility(charName)
 	end
 	
@@ -1173,6 +1178,10 @@ function Generalist:ItemToolTip(wndControl, item, bStuff, nCount)
 end
 
 function Generalist:AddTooltipInfo(wndParent, wndTooltip, item)
+
+	-- Make sure we actually have a tooltip to work with
+	if wndTooltip == nil then return end
+	
 	local wndInv = Apollo.LoadForm(self.xmlDoc, "TooltipInventorySummary",
 		wndTooltip:FindChild("Items"), self)
 	local wndList = wndInv:FindChild("TooltipInventoryList")
@@ -1298,76 +1307,86 @@ function Generalist:AddTooltipInfo(wndParent, wndTooltip, item)
 			-- Now chop off the beginning of the spell's name.
 			-- This is possibly the grossest bit.
 			--
-			local itemPos = 0
-			if string.find(theName,"Grants Schematic: ") then
-				itemPos = string.len("Grants Schematic: ")
-			elseif string.find(theName,"Grant Schematic: ") then
-				itemPos = string.len("Grant Schematic: ")
+			local itemPos = string.find(theName, ": ")
+			local itemCreated = ''
+			
+			-- If we found a colon, chop off everything up to and including it,
+			-- and then any whitespace between the colon and name of the item.
+			--
+			if itemPos ~= nil then
+				itemCreated = string.sub(theName, itemPos + 1)
+				itemCreated = string.gsub(itemCreated, "^%s*", "")
 			end
-			local itemCreated = string.sub(theName, itemPos + 1)
 		
-			-- Loop through characters
-			for _,charName in ipairs(a) do
-		
-				-- A few cleanups for sanity and backwards compatibility
-
-				-- Their schematics
-				local schematics = self.altData[charName].schematics[theSkill]
-				
-				-- Do they know any schematics of this skill?
-				if schematics ~= nil then
-
-					-- Did we find the item in this skill?
-					local foundInSkill = 0
+			-- Now if we got a name for this thing ...
+			if itemCreated ~= '' then
 			
-					-- Now loop through them
-					for _,recipe in ipairs(schematics) do
-						local name = recipe.strName
-						--if theSkill == 16 then
-						--	Print( "Checking '" .. name .. "' versus '" .. itemCreated .. "'" )
-						--end
-						if name == itemCreated then
-							-- It's a match!
-							foundInSkill = 1
-							local invItem = Apollo.LoadForm(self.xmlDoc,
-								"TooltipInventoryItem", wndList, self)
-						invItem:SetText("<T TextColor=\"UI_WindowTextRed\">Already known by " .. charName .. "</T>")
-							invItem:SetHeightToContentHeight()
-						end -- whether they know this recipe
-					end -- loop through recipes of this skill
+				-- Print ("Found the item '" .. itemCreated .. "'")
+				
+				-- Loop through characters
+				for _,charName in ipairs(a) do
+		
+					-- A few cleanups for sanity and backwards compatibility
+
+					-- Their schematics
+					local schematics = self.altData[charName].schematics[theSkill]
+				
+					-- Do they know any schematics of this skill?
+					if schematics ~= nil then
+
+						-- Did we find the item in this skill?
+						local foundInSkill = 0
+			
+						-- Now loop through them
+						for _,recipe in ipairs(schematics) do
+							local name = recipe.strName
+							--if theSkill == 16 then
+							--	Print( "Checking '" .. name .. "' versus '" .. itemCreated .. "'" )
+							--end
+							if name == itemCreated then
+								-- It's a match!
+								foundInSkill = 1
+								local invItem = Apollo.LoadForm(self.xmlDoc,
+									"TooltipInventoryItem", wndList, self)
+								invItem:SetText("<T TextColor=\"UI_WindowTextRed\">Already known by " .. charName .. "</T>")
+								invItem:SetHeightToContentHeight()
+							end -- whether they know this recipe
+						end -- loop through recipes of this skill
 					
-					-- If we did not find it, AND the skill is active,
-					-- we should see if this alt
-					-- can learn the thing now or later.
-					--
-					if foundInSkill == 0 and 
-						self.altData[charName].skillActive[theSkill] == true then
+						-- If we did not find it, AND the skill is active,
+						-- we should see if this alt
+						-- can learn the thing now or later.
+						--
+						if foundInSkill == 0 and 
+							self.altData[charName].skillActive[theSkill] == true then
 						
-						-- Special backwards compatibility, for pre 0.5.1,
-						-- to fill in tiers
-						if self.altData[charName].skillTier[theSkill] == nil then
-							self.altData[charName].skillTier[theSkill] = 1
-						end
+							-- Special backwards compatibility, for pre 0.5.1,
+							-- to fill in tiers
+							if self.altData[charName].skillTier[theSkill] == nil then
+								self.altData[charName].skillTier[theSkill] = 1
+							end
 	
-						-- Is the alt's tier in this skill equal to or greater than
-						-- the item's tier?
-						if self.altData[charName].skillTier[theSkill] >= theTier then
-							local invItem = Apollo.LoadForm(self.xmlDoc,
-								"TooltipInventoryItem", wndList, self)
-							invItem:SetText("<T TextColor=\"green\">Can be learned by " .. charName .. "</T>")
-							invItem:SetHeightToContentHeight()
-						else
-							local invItem = Apollo.LoadForm(self.xmlDoc,
-								"TooltipInventoryItem", wndList, self)
-							invItem:SetText("<T TextColor=\"yellow\">Will be learnable by " .. charName .. "</T>")
-							invItem:SetHeightToContentHeight()
-						end
+							-- Is the alt's tier in this skill equal to or greater than
+							-- the item's tier?
+							if self.altData[charName].skillTier[theSkill] >= theTier then
+								local invItem = Apollo.LoadForm(self.xmlDoc,
+									"TooltipInventoryItem", wndList, self)
+								invItem:SetText("<T TextColor=\"green\">Can be learned by " .. charName .. "</T>")
+								invItem:SetHeightToContentHeight()
+							else
+								local invItem = Apollo.LoadForm(self.xmlDoc,
+									"TooltipInventoryItem", wndList, self)
+								invItem:SetText("<T TextColor=\"yellow\">Will be learnable by " .. charName .. "</T>")
+								invItem:SetHeightToContentHeight()
+							end
+						
+						end -- if they did not already know it
 					
-					end -- if they did not already know it
-				
-				end -- whether they know any schematics	of this skill
+					end -- whether they know any schematics	of this skill
 			
-			end -- loop through alts
+				end -- loop through alts
+				
+			end -- did we find the name of the item created?
 			
 		end -- is there a spell we can parse?
 		

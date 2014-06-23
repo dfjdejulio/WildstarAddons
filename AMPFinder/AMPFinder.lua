@@ -1,9 +1,11 @@
 ------------------------------------------------------------------------------------------------
 -- Client Lua Script for AMPFinder
 -- 2014-04-19, Tomii
--- version 1.5.5, 2014-06-16
+-- version 1.5.6, 2014-06-22
 
--- DONE: Transition away from stateVars, there still seems to be a problem with maintaining state
+-- TODO: Get NPC data rather than hardcoding their names
+-- TODO: Localize text when possible
+-- TODO: Put prices (via item reference tCost?) on the pane as a swappable option
 -- TODO: UpdateArrowVendor and Questgiver -- Show the arrow, but also show a message
 -- TODO: UpdateArrowVendor - If player doesn't have rep (or prestige) then say so instead of travel
 -- TODO: UpdateArrowQuestgiver - Display a message if they're ON the quest and haven't completed it 
@@ -64,6 +66,22 @@ local knAmpMedic		= 396
 local knAmpStalker		= 397
 local knAmpEsper		= 398
 local knAmpSpellslinger	= 399
+
+local knClassWarrior	= GameLib.CodeEnumClass.Warrior 	-- 1
+local knClassEngineer	= GameLib.CodeEnumClass.Engineer	-- 2
+local knClassEsper		= GameLib.CodeEnumClass.Esper		-- 3
+local knClassMedic		= GameLib.CodeEnumClass.Medic		-- 4
+local knClassStalker 	= GameLib.CodeEnumClass.Stalker		-- 5
+local knClassSpellslinger = GameLib.CodeEnumClass.Spellslinger -- 7
+
+local karClassNames = {
+	[knClassWarrior]	= Apollo.GetString("ClassWarrior"),
+	[knClassEngineer]	= Apollo.GetString("ClassEngineer"),
+	[knClassEsper]		= Apollo.GetString("ClassESPER"),
+	[knClassMedic]		= Apollo.GetString("ClassMedic"),
+	[knClassStalker]	= Apollo.GetString("ClassStalker"),
+	[knClassSpellslinger] = Apollo.GetString("ClassSpellslinger"),
+}
 
 -- These are exile locations but we're using them as shorthand for both sides
 local knLocAutolearned  =  1
@@ -147,7 +165,7 @@ local ktPaneData = {
 	[knPaneThaydC]		= { "Thayd (Commodity Exch)",		knLocCommodity,	},
 	[knPaneWhitevale]	= { "Whitevale",					knLocThermock,	},
 	[knPaneWilderrun]	= { "Wilderrun",					knLocFoolsHope,	},
-	[knPaneComplete]	= { "Complete AMP Listing",			nil,			},
+	[knPaneComplete]	= { "Rank 2-3 AMPs",				nil,			},
 	[knPaneEngineer]	= { "Engineer AMPs",				nil,			},
 	[knPaneEsper]		= { "Esper AMPs",					nil,			},
 	[knPaneMedic]		= { "Medic AMPs",					nil,			},
@@ -156,9 +174,15 @@ local ktPaneData = {
 	[knPaneWarrior]		= { "Warrior AMPs",					nil,			},
 }
 
+local kiImbueSpellId = 1
+local kiAmpCategory = 2
+local kiAmpRank = 3
+local kiLocation = 4
+local kiItemId = 5
+
 -- [spellID] = {imbueSpellID, category, rank, knLocation},
-local NewAmpData = {		
-	[knPaneEngineer] = {	
+local AllAmpData = {		
+	[knClassEngineer] = {	
 		[57097] = {56798, 5, 2, 10}, -- Blast Back / Walkers
 		[57332] = {56787, 2, 3, 15}, -- Boosted Armor / Unknown
 		[43210] = {56792, 1, 2, 12}, -- Bust and Move / FoolsHope
@@ -202,7 +226,7 @@ local NewAmpData = {
 		[57326] = {56806, 5, 2, 13}, -- Volatile Armor / FCON
 		[57403] = {56782, 3, 2, 4}, -- Volatility Rising / Quest
 	},	
-	[knPaneEsper] = {	
+	[knClassEsper] = {	
 		[41579] = {56746, 4, 3, 12}, -- B-I-N-G-O / FoolsHope
 		[41581] = {56738, 6, 2, 12}, -- Bounce Back / FoolsHope
 		[41593] = {56737, 2, 2, 4}, -- Build Up / Quest
@@ -246,7 +270,7 @@ local NewAmpData = {
 		[57005] = {71120, 3, 2, 9}, -- The Power! / Thermock
 		[57786] = {56750, 3, 2, 13}, -- True Sight / FCON
 	},	
-	[knPaneMedic] = {	
+	[knClassMedic] = {	
 		[59034] = {57510, 6, 3, 13}, -- Acerbic Injection / FCON
 		[58962] = {57495, 1, 3, 10}, -- Amorphous Barrier / Walkers
 		[58907] = {-1, 3, 3, 1}, -- Annihilation / Autolearned
@@ -290,7 +314,7 @@ local NewAmpData = {
 		[58888] = {57479, 3, 2, 5}, -- Victory Spark / Gallow
 		[58879] = {57504, 5, 2, 13}, -- Weakness into Strength / FCON
 	},	
-	[knPaneSpellslinger] = {	
+	[knClassSpellslinger] = {	
 		[56645] = {-1, 3, 3, 1}, -- Assassinate / Autolearned
 		[57641] = {52103, 2, 2, 4}, -- Augmented Armor / Quest
 		[57644] = {52105, 2, 2, 15}, -- Burst Power / Unknown
@@ -334,7 +358,7 @@ local NewAmpData = {
 		[56973] = {-1, 1, 3, 1}, -- Void Pact / Autolearned
 		[57253] = {52101, 3, 2, 12}, -- Withering Magic / FoolsHope
 	},	
-	[knPaneStalker] = {	
+	[knClassStalker] = {	
 		[39642] = {-1, 2, 3, 1}, -- Amplification Spike / Autolearned
 		[59389] = {71149, 1, 2, 8}, -- Assassin / Skywatch
 		[59341] = {57524, 2, 2, 4}, -- Avoidance Mastery / Quest
@@ -378,7 +402,7 @@ local NewAmpData = {
 		[59400] = {57532, 4, 2, 4}, -- Unfair Advantage / Quest
 		[59435] = {57539, 5, 2, 13}, -- Who's Next? / FCON
 	},	
-	[knPaneWarrior] = {	
+	[knClassWarrior] = {	
 		[59148] = {71370, 6, 2, 9}, -- Anti-Magic Armor / Thermock
 		[59071] = {51531, 3, 3, 10}, -- Armor Shred / Walkers
 		[59058] = {51647, 3, 2, 9}, -- Bloodlust / Thermock
@@ -422,8 +446,14 @@ local NewAmpData = {
 		[59215] = {51612, 1, 2, 4}, -- Unyielding / Quest
 		[59166] = {51572, 6, 2, 6}, -- Vigor / Sylvan
 	},	
-}		
+}
 
+local kiEpisodeNum = 1
+local kiEpisodeQuestgiver = 2
+local kiEpisodeName = 3
+local kiEpisodeQuest1 = 4
+local kiEpisodeQuest2 = 5
+local kiEpisodeQuest3 = 6
 local ktEpisodeInfo = {  -- 541, 309 = knPaneCelestionQ, knPaneDeraduneQ
 	[knPaneDeraduneQ]	= {309, "Apprentice Laveka", "Moodies!", 3302, 3304, 5799},
 	[knPaneAlgorocQ]	= {392, "Pappy Grizzleston", "Loftite Rush", 4609, 4541, 0},
@@ -455,7 +485,6 @@ local knCondPrestige = 3
 local knCondVendor = 4
 local knCondQuestgiver = 5
 local knCondAMP = 6
-local knCondOtherAMP = 7
 
 -----------------------------------------------------------------------------------------------
 -- Initialization
@@ -470,9 +499,7 @@ end
 function AMPFinder:Init()
 	local bHasConfigureFunction = false
 	local strConfigureButtonText = ""
-	local tDependencies = {
-		"AbilityAMPs"
-	}
+	local tDependencies = {} -- "AbilityAMPs" no longer absolutely needed
     Apollo.RegisterAddon(self, bHasConfigureFunction, strConfigureButtonText, tDependencies)
 end
  
@@ -520,8 +547,10 @@ function AMPFinder:OnDocumentReady()
 		self.wndMain:FindChild("PickerListFrame"):Show(false)
 		self.wndMain:FindChild("CompactBtn"):SetCheck(true)
 		self.wndMain:FindChild("MiniFrame"):Show(false)
+		self.wndMain:FindChild("ClassListFrame"):Show(false)
 		
 		self.wndMain:FindChild("PickerBtn"):Enable(false) -- Disable, will be enabled on setamploc
+		self.wndMain:FindChild("ClassFrame"):FindChild("ClassButton"):Enable(false)
 	
 		Apollo.RegisterEventHandler("WindowManagementReady", "OnWindowManagementReady", self)
 		
@@ -558,26 +587,12 @@ function AMPFinder:SetAmpLocations()
 	if (intClass == nil) then return false end
 	local faction = unitPlayer:GetFaction()
 	if (faction == nil) then return false end
-	
+
+	self.nClass = intClass
+	self.nClassDisplayed = intClass -- TODO: switch to this in future
 	self.nFaction = faction
 
-	if     (intClass == GameLib.CodeEnumClass.Warrior) then
-		self.nClassPane = knPaneWarrior
-	elseif (intClass == GameLib.CodeEnumClass.Engineer) then
-		self.nClassPane = knPaneEngineer
-	elseif (intClass == GameLib.CodeEnumClass.Esper) then
-		self.nClassPane = knPaneEsper
-	elseif (intClass == GameLib.CodeEnumClass.Medic) then
-		self.nClassPane = knPaneMedic
-	elseif (intClass == GameLib.CodeEnumClass.Stalker) then
-		self.nClassPane = knPaneStalker
-	elseif (intClass == GameLib.CodeEnumClass.Spellslinger) then
-		self.nClassPane = knPaneSpellslinger
-	else
-		return false -- if faction isn't in this list, try again
-	end
-	self.tMyClassAmps = NewAmpData[self.nClassPane]
-
+	self.tMyClassAmps = AllAmpData[intClass]
 	
 	if (faction == Unit.CodeEnumFaction.ExilesPlayer) then
 		---- EXILE VENDORS ---
@@ -634,6 +649,7 @@ function AMPFinder:CompleteHookup()
 	self:HookVendorLists()
 	
 	self.wndMain:FindChild("PickerBtn"):Enable(true)
+	self.wndMain:FindChild("ClassFrame"):FindChild("ClassButton"):Enable(true)
 
 	Apollo.RegisterEventHandler("VarChange_ZoneName", 		"OnChangeZone", self)
 	Apollo.RegisterEventHandler("SubZoneChanged", 			"OnChangeZone", self)
@@ -650,7 +666,7 @@ function AMPFinder:CompleteHookup()
 	self:UpdateArrow()
 	self:HookPosTrack(false)
 	
-	self:UpdateZone()
+	self:UpdatePane()
 end
 
 --------------------------------------------------
@@ -672,7 +688,7 @@ end
 
 local function IsKeyComplete(nZoneKey) -- used by extendAugmentationTooltip
 	local epiInfo = ktEpisodeInfo[nZoneKey]
-	local nEp = epiInfo[1]
+	local nEp = epiInfo[kiEpisodeNum]
 	local tAllEpisodes = QuestLib.GetAllEpisodes(true)
 	local epiKey = nil
 	for idx, epiEpisode in pairs(tAllEpisodes) do
@@ -683,16 +699,16 @@ local function IsKeyComplete(nZoneKey) -- used by extendAugmentationTooltip
 		local bComplete1 = false
 		local bComplete2 = false
 		local bComplete3 = false
-		if (epiInfo[6] == 0) then bComplete3 = true end
+		if (epiInfo[kiEpisodeQuest3] == 0) then bComplete3 = true end
 		
 		for idx, queSelected in pairs(epiKey:GetAllQuests()) do
 			local nQuestId = queSelected:GetId()
 			
-			if		(nQuestId == epiInfo[4]) then 
+			if		(nQuestId == epiInfo[kiEpisodeQuest1]) then 
 				if (GetQuestStatus(queSelected)) == 2 then bComplete1 = true end
-			elseif	(nQuestId == epiInfo[5]) then 
+			elseif	(nQuestId == epiInfo[kiEpisodeQuest2]) then 
 				if (GetQuestStatus(queSelected)) == 2 then bComplete2 = true end	
-			elseif	(nQuestId == epiInfo[6]) then
+			elseif	(nQuestId == epiInfo[kiEpisodeQuest3]) then
 				if (GetQuestStatus(queSelected)) == 2 then bComplete3 = true end
 			end
 		end
@@ -747,73 +763,25 @@ function AMPFinder:GetKeyEpisode(nKey)
 end
 
 --------------------------------------------------
--- .IsLearnedByName(itemName)
---   returns intLearned, strTier
+-- IsLearnedByItem(item)
+--   returns intLearned, strTier, tAmp
 --           2 if learned
 --           1 if locked
 --           0 if not found
 --   strTier is " (Assault Tier 3)" or " (Hybrid A/S Tier 2)"
 --------------------------------------------------
-function AMPFinder.IsLearnedByName(strAmpName)
-	return 0, "", nil
-	--[[
-	if (string.find(strAmpName," AMP") == nil) then
-		strAmpName = strAmpName .. " AMP"
-	end
-	if (ktAmpTypo[strAmpName] ~= nil) then
-		strAmpName = ktAmpTypo[strAmpName]
-	end
-
-	local boolFound = false
-	local boolLearned = false
-	local tEldanAugmentationData = AbilityBook.GetEldanAugmentationData(AbilityBook.GetCurrentSpec())
-	
-	if not tEldanAugmentationData then return end
-	
-	local strTier = ""
-	local tFoundAmp = nil
-	for idx = 1, #tEldanAugmentationData.tAugments do
-		local tAmp = tEldanAugmentationData.tAugments[idx]
-		
-		if ((tAmp.strTitle.." AMP") == strAmpName) then
-			boolFound = true
-			tFoundAmp = tAmp
-			if tAmp.eEldanAvailability ~= AbilityBook.CodeEnumEldanAvailability.Unavailable then
-				boolLearned = true
-			end
-			
-			local nTier
-			if (tAmp.nDisplayRow > 7) then nTier = 3
-			elseif (tAmp.nDisplayRow > 3) then nTier = 2
-			else nTier = 1 end
-			strTier = " ("..karCategoryToConstantData[tAmp.nCategoryId][3].." Rank "..nTier..")"
-
-		end
-	end
-	
-	if (boolFound) then
-		if (boolLearned) then
-			return 2, strTier, tFoundAmp -- learned
-		else 
-			return 1, strTier, tFoundAmp -- unlearned
-		end
-	else 
-		return 0, strTier, nil 	 -- If we're looking at another class's amp
-	end
-	--]]
-end
-
 function AMPFinder:IsLearnedByItem(item)
 	-- lookup the appropriate chart
+	-- This will fail for autolearned spells, but you won't have an item for them anyway
 	local nClass = item:GetItemType()
 	local tAmpData = {}
-	
-	if		(nClass == knAmpWarrior)		then tAmpData = NewAmpData[knPaneWarrior]
-	elseif	(nClass == knAmpEngineer)		then tAmpData = NewAmpData[knPaneEngineer]
-	elseif	(nClass == knAmpMedic)			then tAmpData = NewAmpData[knPaneMedic]
-	elseif	(nClass == knAmpStalker)		then tAmpData = NewAmpData[knPaneStalker]
-	elseif	(nClass == knAmpEsper)			then tAmpData = NewAmpData[knPaneEsper]
-	elseif	(nClass == knAmpSpellslinger)	then tAmpData = NewAmpData[knPaneSpellslinger]
+
+	if		(nClass == knAmpWarrior)		then tAmpData = AllAmpData[knClassWarrior]
+	elseif	(nClass == knAmpEngineer)		then tAmpData = AllAmpData[knClassEngineer]
+	elseif	(nClass == knAmpMedic)			then tAmpData = AllAmpData[knClassMedic]
+	elseif	(nClass == knAmpStalker)		then tAmpData = AllAmpData[knClassStalker]
+	elseif	(nClass == knAmpEsper)			then tAmpData = AllAmpData[knClassEsper]
+	elseif	(nClass == knAmpSpellslinger)	then tAmpData = AllAmpData[knClassSpellslinger]
 	end
 	
 	local itemInfo = item:GetDetailedInfo()
@@ -821,7 +789,7 @@ function AMPFinder:IsLearnedByItem(item)
 	
 	local nIndex = nil
 	for idx, rec in pairs(tAmpData) do
-		if (rec[1] == nImbueId) then
+		if (rec[kiImbueSpellId] == nImbueId) then
 			nIndex = idx
 			break
 		end
@@ -834,8 +802,8 @@ function AMPFinder:IsLearnedByItem(item)
 end
 
 --------------------------------------------------
--- IsLearnedBySpellId(itemName)
---   returns intLearned, strTier
+-- IsLearnedBySpellId(nSpellId, tAmpRecord)
+--   returns intLearned, strTier, tAmp
 --           2 if learned
 --           1 if locked
 --           0 if not found
@@ -850,8 +818,8 @@ function AMPFinder:IsLearnedBySpellId(nSpellId, tAmpRecord)
 	
 	local strTier = ""
 	if (tAmpRecord ~= nil) then
-		strTier = " ("..karCategoryToConstantData[ tAmpRecord[2] ][ 3 ]
-			.." Rank " .. tAmpRecord[3] .. ")"
+		strTier = " ("..karCategoryToConstantData[ tAmpRecord[kiAmpCategory] ][ 3 ]
+			.." Rank " .. tAmpRecord[kiAmpRank] .. ")"
 	end
 	
 	
@@ -879,7 +847,7 @@ function AMPFinder:IsLearnedBySpellId(nSpellId, tAmpRecord)
 			return 1, strTier, tFoundAmp -- unlearned
 		end
 	else 
-		return 0, strTier, nil 	 -- If we're looking at another class's amp
+		return 0, strTier, nil 	 -- if amp is not listed
 	end
 end
 
@@ -891,6 +859,7 @@ end
 function AMPFinder:HookAMPWindow()
 
 	local tAbilityAMPs = Apollo.GetAddon("AbilityAMPs")
+	if (tAbilityAMPs == nil) then return end -- can't hook if the addon isn't there
 	
 	-- change unlocked but non-prerequisited AMPs to blue
 	local origRedrawSelections = tAbilityAMPs.RedrawSelections
@@ -1068,6 +1037,7 @@ end
 
 function AMPFinder:HookAMPTooltips()
 	local tAbilityAMPs = Apollo.GetAddon("AbilityAMPs")
+	if (tAbilityAMPs == nil) then return end -- can't hook if the addon isn't there
 
 	-- extend AMP Dialog tooltip
 	local origOnAugmentationTooltip = tAbilityAMPs.OnAugmentationTooltip
@@ -1099,7 +1069,9 @@ function AMPFinder:HookVendorLists()
 					local wndItemLabel = wndItem:FindChild("VendorListItemTitle")
 	
 					if (intFound == 2) then				
-						wndItemLabel:SetText(tCurrItem.itemData:GetName().." (already unlocked)")
+						-- wndItemLabel:SetText(tCurrItem.itemData:GetName().." (already unlocked)")
+						wndItemLabel:SetText(String_GetWeaselString(Apollo.GetString("Vendor_KnownRecipe"), 
+							tCurrItem.itemData:GetName() )  )
 					end	
 				end
 			end
@@ -1156,7 +1128,7 @@ end
 function AMPFinder:OnSlashCommand()
 	self.wndMain:Show(true)
 	self.wndMain:ToFront()
-	self:UpdateZone()
+	self:UpdatePane()
 	if (self.bPosTracking) then self:HookPosTrack(true) end
 end
 
@@ -1165,7 +1137,7 @@ function AMPFinder:OnCloseWindow( wndHandler, wndControl, eMouseButton )
 end
 
 function AMPFinder:OnChangeZone(oVar, strNewZone)
-	self:UpdateZone()
+	self:UpdatePane()
 end
 
 function AMPFinder:OnFilterClearBtn( wndHandler, wndControl, eMouseButton )
@@ -1199,6 +1171,7 @@ function AMPFinder:UpdateAMPWindow(filter)
 	end
 	
 	local tAbilityAMPs = Apollo.GetAddon("AbilityAMPs")
+	if (tAbilityAMPs == nil) then return end -- nothing to do if the addon isn't there
 	local cnt = 0
 	local wndAMPs = tAbilityAMPs.wndMain:FindChild("ScrollContainer:Amps")
 	for idx, wndAmp in pairs(wndAMPs:GetChildren()) do
@@ -1233,7 +1206,7 @@ end
 function AMPFinder:AMPFinderBtn_Click( wndHandler, wndControl, eMouseButton )
 	self.wndMain:Show(true)
 	self.wndMain:ToFront()
-	self:UpdateZone()
+	self:UpdatePane()
 	if (self.bPosTracking) then self:HookPosTrack(true) end
 end
 
@@ -1272,15 +1245,14 @@ function AMPFinder:OnHoverCondAmp( wndHandler, wndControl, x, y )
 		sDesc = tAugment.strDescription	
 	else
 		local tSpell = GameLib.GetSpell(tData[2])
-		nRecord = NewAmpData[ tData[4] ][ tData[2] ]
-
-		sCat = karCategoryToConstantData[ nRecord[2] ][3]
+		nRecord = AllAmpData[ tData[4] ][ tData[2] ]
+		sCat = karCategoryToConstantData[ nRecord[kiAmpCategory] ][3]
 		
 		sName = tSpell:GetName()
-		sPowerCost = ktPaneData[ tData[4] ][1] -- Using CLASS name instead of power cost
+		sPowerCost = string.upper(karClassNames[ tData[4] ]).." " -- something's eating the last char. oh well.
 		sPowerCost = string.sub( sPowerCost, 1, string.len(sPowerCost)-1 ) 
 		sTierLabel = String_GetWeaselString(Apollo.GetString("AMP_TierLabel"),
-			sCat, nRecord[3] or "")
+			sCat, nRecord[kiAmpRank] or "")
 		sDesc = tSpell:GetFlavor()
 	end
 	
@@ -1325,7 +1297,7 @@ function AMPFinder:OnClickCondAmp( wndHandler, wndControl, eMouseButton, nLastRe
 		local wndRank = wndCurr:FindChild("AMPRank")
 		if (tAmpData ~= nil) then
 			if (self.nCompleteDisplayMode == 0) then
-				local nRecord = NewAmpData[ tAmpData[4] ][ tAmpData[2] ]
+				local nRecord = AllAmpData[ tAmpData[4] ][ tAmpData[2] ]
 				
 				if (nRecord == nil) then
 					wndRank:SetText("World drop")
@@ -1347,10 +1319,10 @@ function AMPFinder:OnClickCondAmp( wndHandler, wndControl, eMouseButton, nLastRe
 					end
 				end
 			else
-				local nRecord = NewAmpData[ tAmpData[4] ][ tAmpData[2] ]
+				local nRecord = AllAmpData[ tAmpData[4] ][ tAmpData[2] ]
 
-				local nCatId = nRecord[2]
-				local nRank = nRecord[3]
+				local nCatId = nRecord[kiAmpCategory]
+				local nRank = nRecord[kiAmpRank]
 				wndRank:SetText(karCategoryToConstantData[nCatId][3].." R"..nRank)
 			end
 		end -- tAmpData ~= nil
@@ -1375,15 +1347,14 @@ function AMPFinder:OnPaneSelectorBtn( wndHandler, wndControl, eMouseButton )
 	if (self.wndAMPTooltip ~= nil) then self.wndAMPTooltip:Destroy() end
 	self.wndMain:FindChild("PickerListFrame"):Show(false)
 	self.wndMain:FindChild("PickerBtn"):SetCheck(false)
-	self:UpdateZone(wndControl:GetData())
+	self:UpdatePane(wndControl:GetData())
 end
 
 function AMPFinder:OnPickerBtnCheck( wndHandler, wndControl, eMouseButton )
 	if (self.wndAMPTooltip ~= nil) then self.wndAMPTooltip:Destroy() end
-	local wndListFrame = self.wndMain:FindChild("PickerListFrame")
-	if (wndListFrame ~= nil) then
-		wndListFrame:Show(true)
-	end
+	self.wndMain:FindChild("PickerListFrame"):Show(true)
+	self.wndMain:FindChild("ClassListFrame"):Show(false)
+	self.wndMain:FindChild("ClassFrame"):FindChild("ClassButton"):SetCheck(false)
 end
 
 function AMPFinder:OnPickerBtnUncheck( wndHandler, wndControl, eMouseButton )
@@ -1392,6 +1363,28 @@ function AMPFinder:OnPickerBtnUncheck( wndHandler, wndControl, eMouseButton )
 	if (wndListFrame ~= nil) then
 		wndListFrame:Show(false)
 	end
+end
+
+function AMPFinder:OnClassSelectorBtn( wndHandler, wndControl, eMouseButton )
+	if (self.wndAMPTooltip ~= nil) then self.wndAMPTooltip:Destroy() end
+	self.wndMain:FindChild("ClassListFrame"):Show(false)
+	self.wndMain:FindChild("ClassFrame"):FindChild("ClassButton"):SetCheck(false)
+	self.nClassDisplayed = wndControl:GetData()
+	self:UpdatePane(-1)
+end
+
+function AMPFinder:OnClassBtnCheck( wndHandler, wndControl, eMouseButton )
+	if (self.wndAMPTooltip ~= nil) then self.wndAMPTooltip:Destroy() end
+	local wndListFrame = self.wndMain:FindChild("ClassListFrame")
+	if (wndListFrame ~= nil) then wndListFrame:Show(true) end
+	self.wndMain:FindChild("PickerListFrame"):Show(false)
+	self.wndMain:FindChild("PickerBtn"):SetCheck(false)
+end
+
+function AMPFinder:OnClassBtnUncheck( wndHandler, wndControl, eMouseButton )
+	if (self.wndAMPTooltip ~= nil) then self.wndAMPTooltip:Destroy() end
+	local wndListFrame = self.wndMain:FindChild("ClassListFrame")
+	if (wndListFrame ~= nil) then wndListFrame:Show(false) end
 end
 
 function AMPFinder:OnInterfaceMenuListHasLoaded()
@@ -1425,7 +1418,7 @@ end
 function AMPFinder:OnInterfaceMenuShowHide() 
 	self.wndMain:Show(true)
 	self.wndMain:ToFront()
-	self:UpdateZone()
+	self:UpdatePane()
 	if (self.bPosTracking) then self:HookPosTrack(true) end
 end
 
@@ -1434,10 +1427,65 @@ end
 -- AMP Finder functions
 --------------------------------------
 
-function AMPFinder:UpdateZone(nZoneId)
+function AMPFinder:UpdateClassIcon() 
+	local nClass = self.nClassDisplayed
+	local strIcon = "IconSprites:Icon_Windows_UI_CRB_Infinity"
+		
+	if     (nClass == knClassWarrior) then
+		strIcon = "IconSprites:Icon_Windows_UI_CRB_Warrior"
+	elseif (nClass == knClassEngineer) then
+		strIcon = "IconSprites:Icon_Windows_UI_CRB_Engineer"
+	elseif (nClass == knClassEsper) then
+		strIcon = "IconSprites:Icon_Windows_UI_CRB_Esper"
+	elseif (nClass == knClassMedic) then
+		strIcon = "IconSprites:Icon_Windows_UI_CRB_Medic"
+	elseif (nClass == knClassStalker) then
+		strIcon = "IconSprites:Icon_Windows_UI_CRB_Stalker"
+	elseif (nClass == knClassSpellslinger) then
+		strIcon = "IconSprites:Icon_Windows_UI_CRB_Spellslinger"
+	else
+		return -- not sure what this is, but it ain't somethin we can handle
+	end
+	self.wndMain:FindChild("ClassFrame"):FindChild("ClassIcon"):SetSprite(strIcon)
+	self.wndMain:FindChild("ClassFrame"):SetTooltip("Currently showing "
+		..karClassNames[self.nClassDisplayed].." AMPs")
+end
+
+function AMPFinder:BuildClassMenu() 
+	local wndClassList = self.wndMain:FindChild("ClassListFrame")
+	if (#wndClassList:GetChildren() > 0) then return end
+
+	local arClassList = {
+		knClassEngineer, knClassEsper, knClassMedic,
+		knClassSpellslinger, knClassStalker, knClassWarrior,
+	}
+	local arIconList = {
+		"IconSprites:Icon_Windows_UI_CRB_Engineer",
+		"IconSprites:Icon_Windows_UI_CRB_Esper",
+		"IconSprites:Icon_Windows_UI_CRB_Medic",
+		"IconSprites:Icon_Windows_UI_CRB_Spellslinger",
+		"IconSprites:Icon_Windows_UI_CRB_Stalker",
+		"IconSprites:Icon_Windows_UI_CRB_Warrior",		
+	}
+	for idx=1, #arClassList do
+		local wndCurr = Apollo.LoadForm(self.xmlDoc, "ClassSelectorBtn", wndClassList, self)
+		wndCurr:SetData(arClassList[idx])
+		wndCurr:FindChild("Label"):SetText(karClassNames[ arClassList[idx] ]) -- arNameList[idx])
+		wndCurr:FindChild("Icon"):SetSprite(arIconList[idx])
+		if (arClassList[idx] ~= self.nClass) then
+			wndCurr:FindChild("Arrow"):Show(false)
+		end
+	end
+	wndClassList:ArrangeChildrenVert(1)
+end
+
+function AMPFinder:UpdatePane(nZoneId)
+	self:UpdateClassIcon()  -- TODO: Move this to the end of the procedure maybe
 	local nOldShownZone = self.nDisplayedPane
 	if (nZoneId ~= nil) then
-		if (self.nUserSelectedPane ~= nZoneId) then 
+		if (nZoneId == -1) then
+			nOldShownZone = nil
+		else
 			self.nUserSelectedPane = nZoneId
 		end
 	end
@@ -1487,21 +1535,19 @@ function AMPFinder:UpdateZone(nZoneId)
 	self.wndMain:FindChild("PickerBtnText"):SetText(strZoneName)
 	self.wndMain:FindChild("PickerList"):DestroyChildren()
 	local wndPickerList = self.wndMain:FindChild("PickerList")
-	
+
+	self:BuildClassMenu()
+
 	local arZoneList
 
 	if (self.nFaction == Unit.CodeEnumFaction.ExilesPlayer) then
 		arZoneList = {knPaneAlgoroc, knPaneAlgorocQ, knPaneCelestion, knPaneCelestionQ, 
 			knPaneFarside, knPaneFarsideE, knPaneGaleras, knPaneThayd, knPaneThaydC,
-			knPaneWhitevale, knPaneWilderrun, -- knPaneComplete,
-			knPaneEngineer, knPaneEsper, knPaneMedic,
-			knPaneSpellslinger, knPaneStalker, knPaneWarrior}
+			knPaneWhitevale, knPaneWilderrun, knPaneComplete}
 	elseif (self.nFaction == Unit.CodeEnumFaction.DominionPlayer) then
 		arZoneList = {knPaneAuroria, knPaneDeradune, knPaneDeraduneQ, knPaneEllevar, 
 			knPaneEllevarQ, knPaneFarside, knPaneFarsideD, knPaneIllium, knPaneIlliumC, 
-			knPaneWhitevale, knPaneWilderrun, -- knPaneComplete,
-			knPaneEngineer, knPaneEsper, knPaneMedic,
-			knPaneSpellslinger, knPaneStalker, knPaneWarrior}
+			knPaneWhitevale, knPaneWilderrun, knPaneComplete}
 	else
 		return
 	end
@@ -1513,7 +1559,7 @@ function AMPFinder:UpdateZone(nZoneId)
 		if (idZone == 0) then
 			wndCurr:SetText("(current zone)")
 		else
-			if (idZone == tZoneInfo.id) or (idZone == self.nClassPane) then
+			if (idZone == tZoneInfo.id) then
 				wndCurr:SetText("( "..ktPaneData[idZone][1].." )")
 				wndCurr:SetStyleEx("UseWindowTextColor",true)
 			else
@@ -1544,7 +1590,7 @@ function AMPFinder:UpdateZone(nZoneId)
 		local vendorTag = ktPaneData[self.nDisplayedPane][2]
 		local wndQgiver = Apollo.LoadForm(self.xmlDoc, "AmpQuestgiverForm", self.wndMain:FindChild("AMP_Info"), self)
 		local wndQuestgiver, nTop = self:AddConditionQuestgiver(wndQgiver, nTop, vendorTag, self.nDisplayedPane)
-		nTop = self:AddConditionAMPs(knLocQuest, nil, wndQgiver, nTop, true)				
+		nTop = self:AddConditionAMPs(knLocQuest, nil, wndQgiver, nTop, true)
 		self:SetupArrow(2, wndQgiver, wndQuestgiver)
 		wndQgiver:SetAnchorOffsets(10, 10, -10, nTop+20)
 		
@@ -1565,6 +1611,7 @@ function AMPFinder:UpdateZone(nZoneId)
 		local wndVend = Apollo.LoadForm(self.xmlDoc, "AmpVendorForm", self.wndMain:FindChild("AMP_Info"), self)
 		local wndVendor, nTop = self:AddConditionVendor(wndVend, nTop, vendorTag)
 		nTop = self:AddConditionAMPs(knLocUnknown, knLocQuest, wndVend, nTop)
+
 		self:SetupArrow(1, wndVend, wndVendor)
 		wndVend:SetAnchorOffsets(10, 10, -10, nTop+20)
 		
@@ -1586,6 +1633,7 @@ function AMPFinder:UpdateZone(nZoneId)
 		local wndVendor, nTop = self:AddConditionVendor(wndVend, nTop, vendorTag)
 		nTop = self:AddConditionPrestige(75, wndVend, nTop)
 		nTop = self:AddConditionAMPs(vendorTag, nil, wndVend, nTop)
+
 		self:SetupArrow(1, wndVend, wndVendor)
 		wndVend:SetAnchorOffsets(10, 10, -10, nTop+20)
 				
@@ -1618,9 +1666,9 @@ function AMPFinder:UpdateZone(nZoneId)
 		self.wndMain:FindChild("AMP_Info"):RecalculateContentExtents()
 		self:InvokeWindowPref()
 
-	--[[		
 	elseif (self.nDisplayedPane == knPaneComplete) then
 
+		self:UpdateClassIcon()
 		self.wndMain:FindChild("CompactBtn"):Enable(false)
 		self.wndMain:FindChild("AMP_Info"):SetText("")								
 		self.wndMain:FindChild("AMP_Info"):DestroyChildren()
@@ -1635,36 +1683,19 @@ function AMPFinder:UpdateZone(nZoneId)
 													
 		self.wndMain:FindChild("AMP_Info"):SetVScrollPos(0)
 		self.wndMain:FindChild("AMP_Info"):RecalculateContentExtents()
-		self:InvokeWindowPref()
-	--]]
-	
-	elseif (self.nDisplayedPane <= knPaneEngineer) and (self.nDisplayedPane >= knPaneWarrior) then
-	
-		self.wndMain:FindChild("CompactBtn"):Enable(false)
-		self.wndMain:FindChild("AMP_Info"):SetText("")								
-		self.wndMain:FindChild("AMP_Info"):DestroyChildren()
-		self.bPosTracking = false
-		self:HookPosTrack(false)
-		self:SetupArrow(0)
-		
-		local nTop = 10 -- y location
-		local wndList = Apollo.LoadForm(self.xmlDoc, "AmpGenericForm", self.wndMain:FindChild("AMP_Info"), self)
-		nTop = self:AddConditionOtherAMPs(self.nDisplayedPane, nil, wndList, nTop)
-		wndList:SetAnchorOffsets(10, 10, -10, nTop+20)
-													
-		self.wndMain:FindChild("AMP_Info"):SetVScrollPos(0)
-		self.wndMain:FindChild("AMP_Info"):RecalculateContentExtents()
 		self:InvokeWindowPref()	
-		
+
 	else -- current zone is not in the list
+	
 		self.wndMain:FindChild("AMP_Info"):SetText("No AMP info found for current zone.")				
 		self.wndMain:FindChild("AMP_Info"):DestroyChildren()
 		self.bPosTracking = false
 		self:HookPosTrack(false)
 		self:SetupArrow(0)
+		
 	end					
 
-end -- updatezone
+end -- UpdatePane
 
 function AMPFinder:SetupArrow(nType, wndPane, wndLabel)
 	self.nArrowType = nType
@@ -1704,7 +1735,9 @@ end
 function AMPFinder:AddConditionQuestgiver(wndParent, nTop, nVendorTag, nZoneTag)
 	local tVendorData = self.LocationToVendor[nVendorTag][1]
 	local tEp = ktEpisodeInfo[nZoneTag]
-	local ep, strQgiver, strQline, q1, q2, q3 = tEp[1], tEp[2], tEp[3], tEp[4], tEp[5], tEp[6]
+	local ep, strQgiver, strQline, q1, q2, q3 = tEp[kiEpisodeNum], tEp[kiEpisodeQuestgiver], tEp[kiEpisodeName],
+		tEp[kiEpisodeQuest1], tEp[kiEpisodeQuest2], tEp[kiEpisodeQuest3]
+		
 	local wndCurr = Apollo.LoadForm(self.xmlDoc, "Condition", wndParent, self)
 	wndParent:FindChild("AddInfo"):SetText(tVendorData[2].."\n("..tVendorData[3]..","..tVendorData[4]..")")
 	wndCurr:FindChild("ConditionField"):SetText("Quests from "..strQgiver)
@@ -1763,81 +1796,7 @@ function AMPFinder:AddConditionReputation(wndParent, nTop, strGroupName)
 	return nTop+25
 end
 
-function AMPFinder:AddConditionAMP(wndParent, nTop, tAmp, questTooltip)
-	local wndCurr = Apollo.LoadForm(self.xmlDoc, "AMPIndicator", wndParent, self)
-	
-	wndCurr:FindChild("AMPName"):SetText(tAmp.strTitle)
-	
-	local wndRank = wndCurr:FindChild("AMPRank")
-
-	if (self.nCompleteDisplayMode == 1) and (wndParent:GetName() == "AmpGenericForm") then
-		local strLine = tAmp.strTitle .. " - "
-		local nRecord = self.tMyClassAmps[tAmp.nSpellIdAugment]
-		if (nRecord == nil) then
-			wndRank:SetText("World drop")
-		else
-			local nLoc = nRecord[4]
-			if (nLoc == nil) or (nLoc == knLocUnknown) then
-				wndRank:SetText("World drop")
-			elseif (nLoc == knLocAutolearned) then
-				wndRank:SetText("Auto-learned")
-			elseif (nLoc == knLocQuest) then
-				wndRank:SetText("Quest reward")
-			elseif (nLoc == knLocGallowSylvan) then
-				wndRank:SetText(self.LocationToVendor[knLocGallow][1][1].."/"..self.LocationToVendor[knLocSylvan][1][1])
-			elseif (self.LocationToVendor[nLoc] ~= nil) then
-				wndRank:SetText(self.LocationToVendor[nLoc][1][1])
-			else
-				wndRank:SetText("")
-			end	
-		end	
-	else 
-		strWedgeName = karCategoryToConstantData[tAmp.nCategoryId][3]
-		wndRank:SetText(strWedgeName.." R"..tAmp.nCategoryTier)
-	end
-
-	wndCurr:SetData( {knCondAMP, tAmp.nSpellIdAugment, false, self.nClassPane} )
-	wndCurr:SetAnchorOffsets(0, nTop, 0, nTop+18)
-	if (questTooltip) then
-		wndCurr:SetTooltip("Quest rewards these amps.\nCan also be dropped\nby enemies or bought on\nthe Commodities Exchange.")
-	end
-
-	self:UpdateCondAMP(wndCurr)
-
-	return nTop+18
-end
-
-function AMPFinder:AddConditionAMPs(loc1, loc2, wndVend, nTop, questTooltip)
-	local arAmpList = {}
-	local tAmps = {}
-	local tEldanAugmentationData = AbilityBook.GetEldanAugmentationData(AbilityBook.GetCurrentSpec())
-
-	for idx = 1, #tEldanAugmentationData.tAugments do
-		local tAmp = tEldanAugmentationData.tAugments[idx]
-
-		if (tAmp.nCategoryTier >= 2) then
-			local nRecord = self.tMyClassAmps[tAmp.nSpellIdAugment]
-			if (nRecord == nil) then
-				nLoc = knLocUnknown
-			else
-				local nLoc = nRecord[4]
-				if (nLoc == nil) then nLoc = knLocUnknown end
-				if ((nLoc == loc1) or (nLoc == loc2)) or (loc1 == nil) then
-					table.insert(arAmpList, tAmp.strTitle)
-					tAmps[tAmp.strTitle] = tAmp
-				end
-			end
-		end
-	end
-	table.sort(arAmpList)
-
-	for idx=1, #arAmpList do
-		nTop = self:AddConditionAMP(wndVend, nTop, tAmps[arAmpList[idx]], questTooltip)
-	end
-	return nTop
-end
-
-function AMPFinder:AddConditionOtherAMP(wndParent, nTop, sAmpName, nSpellId, nLoc, nPane, questTooltp)
+function AMPFinder:AddConditionAMP(wndParent, nTop, sAmpName, nSpellId, nLoc, questTooltip)
 	local wndCurr = Apollo.LoadForm(self.xmlDoc, "AMPIndicator", wndParent, self)
 	
 	wndCurr:FindChild("Image"):SetSprite("CRB_Basekit:kitIcon_Holo_Lock")
@@ -1862,46 +1821,70 @@ function AMPFinder:AddConditionOtherAMP(wndParent, nTop, sAmpName, nSpellId, nLo
 		end
 		
 	else
-		local tRecord = NewAmpData[nPane][nSpellId]
-		strWedgeName = karCategoryToConstantData[ tRecord[2] ][3]
-		wndRank:SetText(strWedgeName.." R"..tRecord[3])		
+		local tRecord = AllAmpData[self.nClassDisplayed][nSpellId] -- AllAmpData[nPane][nSpellId]
+		strWedgeName = karCategoryToConstantData[ tRecord[kiAmpCategory] ][3]
+		wndRank:SetText(strWedgeName.." R"..tRecord[kiAmpRank])		
 	end
 	
-	if (nPane == self.nClassPane) then
-		wndCurr:SetData( {knCondAMP, nSpellId, false, nPane} )
+	if (self.nClass == self.nClassDisplayed) then
+		wndCurr:SetData( {knCondAMP, nSpellId, false, self.nClassDisplayed} )
 	else
-		wndCurr:SetData( {knCondOtherAMP, nSpellId, false, nPane} )
+		wndCurr:SetData( {knCondAMP, nSpellId, false, self.nClassDisplayed} )
 	end
 
 	wndCurr:SetAnchorOffsets(0, nTop, 0, nTop+18)
 	
-	if (nPane == self.nClassPane) then
+	if (questTooltip) then
+		wndCurr:SetTooltip("Quest rewards these amps.\nCan also be dropped\nby enemies or bought on\nthe Commodities Exchange.")
+	end
+	
+	if (self.nClass == self.nClassDisplayed) then
 		self:UpdateCondAMP(wndCurr)
 	end
 	
 	return nTop+18
 end
 
-function AMPFinder:AddConditionOtherAMPs(nPane, loc2, wndVend, nTop, questTooltip)
+function AMPFinder:AddConditionAMPs(loc1, loc2, wndVend, nTop, questTooltip)
 	local tNameSorter = { }
 	local tNameIndex = { }
-	local tThisClassAmps = NewAmpData[nPane]
+	
+	local tThisClassAmps = AllAmpData[self.nClassDisplayed]
 	if (tThisClassAmps == nil) then
 		return nTop
 	end
+	
+	if (self.nClass ~= self.nClassDisplayed) then
+		local wndCurr = Apollo.LoadForm(self.xmlDoc, "Condition", wndVend, self)
+		wndCurr:FindChild("ConditionField"):SetText(
+			karClassNames[self.nClassDisplayed].." AMPs:")
+		wndCurr:FindChild("ConditionField"):SetTextColor("UI_TextHoloBodyHighlight")
+		wndCurr:FindChild("Image"):SetSprite(nil)
+		wndCurr:SetAnchorOffsets(0, nTop, 0, nTop+25)
+		nTop = nTop+20
+	end
+	
 	for idx, rec in pairs(tThisClassAmps) do
 		local spellData = GameLib.GetSpell(idx)
 		if (spellData ~= nil) then
 			local sAmpName = spellData:GetName()
-			table.insert(tNameSorter, sAmpName)
-			tNameIndex[sAmpName] = idx
+			
+			local nRecord = tThisClassAmps[idx]
+			if (nRecord ~= nil) then
+				local nLoc = nRecord[kiLocation]
+				if (nLoc == nil) then nLoc = knLocUnknown end
+				if ((nLoc == loc1) or (nLoc == loc2)) or (loc1 == nil) then
+					table.insert(tNameSorter, sAmpName)
+					tNameIndex[sAmpName] = idx
+				end
+			end
 		end
 	end
 	table.sort(tNameSorter)
 	for i,sAmpName in ipairs(tNameSorter) do
 		local nSpellId = tNameIndex[sAmpName]
 		local tRecord = tThisClassAmps[nSpellId]
-		nTop = self:AddConditionOtherAMP(wndVend, nTop, sAmpName, nSpellId, tRecord[4], nPane, questTooltip)
+		nTop = self:AddConditionAMP(wndVend, nTop, sAmpName, nSpellId, tRecord[4], questTooltip)
 	end
 	return nTop
 end
@@ -2240,7 +2223,6 @@ end
 
 function AMPFinder:UpdateCondAMP(wndParent) 
 	local tData = wndParent:GetData()
-	-- local intFound, strAmpTier, tAmp = self:IsLearnedByName(tData[2])
 	local intFound, strAmpTier, tAmp = self:IsLearnedBySpellId(tData[2])
 	if (tAmp ~= nil) and (tAmp.eEldanAvailability ~= AbilityBook.CodeEnumEldanAvailability.Unavailable) then
 		wndParent:SetData( { tData[1], tData[2], true, tData[4] } )  -- set data to 'true' to indicate it's okay
@@ -2347,6 +2329,10 @@ function AMPFinder:CompactWindow()
 	self.wndMain:FindChild("PickerBtn"):SetCheck(false)
 	self.wndMain:FindChild("PickerBtn"):Show(false)
 	self.wndMain:FindChild("PickerListFrame"):Show(false)
+	self.wndMain:FindChild("PickerFrame"):Show(false)
+	self.wndMain:FindChild("ClassFrame"):Show(false)
+	self.wndMain:FindChild("ClassFrame"):FindChild("ClassButton"):SetCheck(false)
+	self.wndMain:FindChild("ClassListFrame"):Show(false)
 	self.wndMain:FindChild("AMP_Info"):SetStyle("VScroll", false)
 	self.wndMain:FindChild("AMP_Info"):SetVScrollPos(0)
 	self.wndMain:FindChild("AMP_Info"):SetAnchorOffsets(-28, -11, 288, 90)
@@ -2361,8 +2347,10 @@ function AMPFinder:UnCompactWindow()
 	self.wndMain:FindChild("Frame"):Show(true)
 	self.wndMain:FindChild("WindowTitle"):Show(true)
 	self.wndMain:FindChild("PickerBtn"):Show(true)
+	self.wndMain:FindChild("PickerFrame"):Show(true)
+	self.wndMain:FindChild("ClassFrame"):Show(true)
 	self.wndMain:FindChild("AMP_Info"):SetStyle("VScroll", true)
-	self.wndMain:FindChild("AMP_Info"):SetAnchorOffsets(35, 106, 351, 390)
+	self.wndMain:FindChild("AMP_Info"):SetAnchorOffsets(35, 115, 351, 390)
 	self.wndMain:FindChild("MiniFrame"):SetAnchorOffsets(83, 21, 324, 119)
 	self.wndMain:FindChild("CompactBtn"):SetAnchorOffsets(294, 20, 326, 52)
 end
@@ -2410,6 +2398,26 @@ function AMPFinder:OnWindowShow( wndHandler, wndControl )
 		self.wndMain:FindChild("CompactBtn"):SetCheck(true)
 		self:UnCompactWindow()
 	end
+end
+
+---------------------------------------------------------------------------------------------------
+-- AmpFinderForm Functions
+---------------------------------------------------------------------------------------------------
+
+function AMPFinder:TEMP_SelectWarrior( wndHandler, wndControl, eMouseButton, nLastRelativeMouseX, nLastRelativeMouseY, bDoubleClick, bStopPropagation )
+	self.nClassDisplayed = knClassWarrior
+	self:UpdateClassIcon()
+	self:UpdatePane(knZoneWarrior)
+	self.wndMain:FindChild("ClassFrame"):FindChild("ClassButton"):SetCheck(false)
+	self.wndMain:FindChild("ClassListFrame"):Show(false)
+end
+
+function AMPFinder:TEMP_SelectStalker( wndHandler, wndControl, eMouseButton, nLastRelativeMouseX, nLastRelativeMouseY, bDoubleClick, bStopPropagation )
+	self.nClassDisplayed = knClassStalker
+	self:UpdateClassIcon()
+	self:UpdatePane(knZoneStalker)
+	self.wndMain:FindChild("ClassFrame"):FindChild("ClassButton"):SetCheck(false)
+	self.wndMain:FindChild("ClassListFrame"):Show(false)
 end
 
 ------------------------------------------------------------------
