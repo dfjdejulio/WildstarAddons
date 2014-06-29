@@ -8,6 +8,7 @@ require "Unit"
 require "FriendshipLib"
 require "string"
 require "HousingLib"
+require "CraftingLib"
 
 -----------------------------------------------------------------------------------------------
 -- NeighborNotes Module Definition
@@ -56,8 +57,6 @@ local ktMiningNodeWeight =
 	["Shadeslate Node"] = 4,
 	["Novacite Node"] = 4,
 }
-
-
 
 local ktRelicNodeName =
 {
@@ -114,6 +113,9 @@ local ktPlugName =
 	[2] = "Garden",
 	[3] = "Vending Machine",
 	[4] = "Crafting Station",
+	[5] = "Warhorn",
+	[6] = "Mailbox",
+	[7] = "Personal Bank",
 	
 	-- Biome Teleports
 	[101] = "Biome: Algoroc",
@@ -134,11 +136,11 @@ local ktPlugName =
 	
 	-- 1x1 Challenges
 	[201] = "CHALLENGE: Anti-Air Defense Tower", --
-	[202] = "CHALLENGE: Bone Pit",
+	[202] = "CHALLENGE: Bone Pit", --
 	[203] = "CHALLENGE: Cubig Feeder", --
 	[204] = "CHALLENGE: Flying Saucer", --
 	[205] = "CHALLENGE: Medical Station", --
-	[206] = "CHALLENGE: Weather Control Station",
+	[206] = "CHALLENGE: Weather Control Station", --
 	[207] = "CHALLENGE: Whirlwind", --
 	
 	-- 1x2 Challenges
@@ -153,24 +155,25 @@ local ktPlugName =
 	[309] = "CHALLENGE: Protostar Hazard Training Course", --
 	[310] = "CHALLENGE: Shardspire Canyon", --
 	[311] = "CHALLENGE: Spooky Graveyard", --
+	[312] = "CHALLENGE: Osun Forge", --
 	
 	-- 1x1 Expeditions
-	[401] = "EXPEDITION: Abandoned Eldan Test Lab", -- Conflicts with Abandoned Test Lab
-	[402] = "EXPEDITION: Creepy Cave",
-	[403] = "EXPEDITION: Kel Voreth Underforge", -- Conflicts with Abandoned Eldan Test Lab
+	[401] = "EXPEDITION: Abandoned Eldan Test Lab", -- Conflicts with the other Instance Portals
+	[402] = "EXPEDITION: Creepy Cave", -- Conflicts with the other Instance Portals
+	[403] = "EXPEDITION: Kel Voreth Underforge", -- Conflicts with the other Instance Portals
 	[404] = "EXPEDITION: Mayday", --
 	
 	-- 1x2 Expeditions
-	[501] = "",
+	--[501] = "",
 	
 	-- 1x1 Raids
 	[601] = "RAID: Datascape Raid Portal", 
 	
 	-- 1x2 Raids
-	[701] = "",
+	--[701] = "",
 	
 	-- 1x1 Public Event
-	[801] = "",
+	--[801] = "",
 	
 	-- 1x2 Public Event
 	[901] = "PUBLIC EVENT: Blasted Landscape", --
@@ -182,6 +185,12 @@ local ktPlugUnitLookup =
 	["Food Table"] = 1,
 	["Snack-O-Matic 3000"] = 3,	
 	["Crafting Station"] = 4,
+	["Warhorn"] = 5,
+	["Dominion Mailbox"] = 6,
+	["Exile Mailbox"] = 6,
+	["Draken Mailbox"] = 6,
+	["Aurin Mailbox"] = 6,
+	["Private Storage"] = 7,
 
 	-- Biome Portals
 	["Algoroc Portal"] = 101,
@@ -202,11 +211,13 @@ local ktPlugUnitLookup =
 	
 	-- Challenges		
 	["Rocket Launcher"] = 201,
+	["Spirit Zapper"] = 202,
 	["Cubig Feeder"] = 203,
 	["Ikthian Flying Saucer"] = 204,
 	["Critically Wounded Patient"] = 205,
 	["Seriously Wounded Patient"] = 205,
 	["Lightly Wounded Patient"] = 205,
+	["Electrostatic Container"] = 206,
 	["Air-infused Crystal"] = 207,
 
 	["Research Desk"] = 301,
@@ -219,9 +230,9 @@ local ktPlugUnitLookup =
 	["Protostar Hazard Training Console"] = 309,
 	["Plushie"] = 310,
 	["Call To The Spirits!"] = 311,
+	["Book of Elements"] = 312,
 
 	-- Expeditions
-	["Instance Portal"] = 401,
 	["Transport Ship"] = 404,
 	
 	["Exile Beacon"] = 901,
@@ -229,7 +240,7 @@ local ktPlugUnitLookup =
 
 local ktGenericPlugIcon =
 {
-	["Biome"] = "IconSprites:Icon_Achievement_Achievement_Zone",
+	["Biome"] = "CRB_MinimapSprites:sprMM_InstancePortal",
 	["Challenge"] = "IconSprites:Icon_Achievement_Achievement_Challenges",
 	["Expedition"] = "IconSprites:Icon_Achievement_Achievement_Shiphand",
 	["Dungeon"] = "IconSprites:Icon_Achievement_Achievement_Dungeon",
@@ -239,32 +250,35 @@ local ktGenericPlugIcon =
 
 local ktPlugIcon =
 {
-	[1] = "IconSprites:Icon_ItemMisc_Meat_pie",
+	[1] = "IconSprites:Icon_Windows_UI_CRB_Adventure_Malgrave_Food",
 	[3] = "IconSprites:Icon_MapNode_Map_vendor_Consumable",
-	[4] = "IconSprites:Icon_ItemMisc_Generic_toolbox",
+	[4] = "IconSprites:Icon_MapNode_Map_Tradeskill",
+	[5] = "IconSprites:Icon_ItemMisc_Horn_02",
+	[6] = "IconSprites:Icon_MapNode_Map_Mailbox",
+	[7] = "IconSprites:Icon_MapNode_Map_Bank",
 }
 
-local ktDefaultSettings = {
-	AutoInviteFriends = false,
-	AutoInviteGuild = false,
-	BlackList = {},
+local ktDefaultUserSettings = {
+	bOpenWithSocial = true,
+	bCloseWithSocial = true,
+	bOnVisitSelectNext = true,
+
+	tFilters = {
+		bHarvestable = false,
+		bShowAllCharacters = false,
+	},
 }
 
 local ktDefaultNeighborInfo = {
-	strNote = "Default",
+	strNote = "",
 	nNodeType = 0,
-	nNodeID = 0,	
-	tPlugs = {
-		[1] = 0,
-		[2] = 0,
-		[3] = 0,
-		[4] = 0,
-		[5] = 0,
-		[6] = 0,
-	}
+	nNodeID = 0,
+	nNodeWeight = 0,
+	nPlugWeight = 0,
+	tPlugs = {},
 }
 
-local knSettingsVersion = 1
+local knSettingsVersion = 2
 local knNeighborListVersion = 1
 
 local kcrOnline = ApolloColor.new("UI_TextHoloBodyHighlight")
@@ -274,6 +288,8 @@ local kcrNeutral = ApolloColor.new("gray")
 -----------------------------------------------------------------------------------------------
 -- Generic Addon Functions
 -----------------------------------------------------------------------------------------------
+
+-- This is the constructor
 function NeighborNotes:new(o)
     o = o or {}
     setmetatable(o, self)
@@ -281,17 +297,26 @@ function NeighborNotes:new(o)
     return o
 end
 
+-- Registers our Addon with the Apollo UI
 function NeighborNotes:Init()
-    Apollo.RegisterAddon(self, false, "", { "SocialPanel" })
+	local bHasConfiguration = true
+	local strConfigText = "Neighbor Notes"
+	local tDependencies = {
+		"SocialPanel",
+	}
+    Apollo.RegisterAddon(self, bHasConfiguration, strConfigText, tDependencies)
 end
 
+-- Loads the initial variables and registers the NN Callback function (for when the window is loaded)
 function NeighborNotes:OnLoad()
+	self.tActivePlayerSkills = {}
 	self.tNeighborNotes = {}
 	self.tActiveNodeList = {}
 	self.tQueuedUnits = {}
 	self.tActiveNodeList = {}
+	
 
-	self.tUserSettings = ktDefaultSettings
+	self.tUserSettings = ktDefaultUserSettings
 	self.strNeighborName = ""
 	self.strCurrentZone = GetCurrentZoneName()
 	self.bNeighborZone = NeighborNotes:IsNeighborZone()
@@ -306,55 +331,39 @@ function NeighborNotes:OnLoad()
 	end
 end
 
+-- Loads the window data, registers event handlers, slash commands, and timers
 function NeighborNotes:OnDocumentLoaded()
 	if self.xmlDoc ~= nil then
-		self.wndMain = Apollo.LoadForm(self.xmlDoc, "NeighborListForm", nil, self)
-		if self.wndMain == nil then
-			Apollo.AddAddonErrorText(self, "Could not load the NeighborNotes window.")
-			return
-		end
-		self.wndMain:Show(false)
-
-		self.wndListContainer = self.wndMain:FindChild("ListContainer")
-		
-		self.wndMain:FindChild("AddMemberCloseBtn"):SetData(self.wndMain:FindChild("AddWindow"))
-		self.wndMain:FindChild("EditNoteCloseBtn"):SetData(self.wndMain:FindChild("EditNoteWindow"))
-		
 		-- Register Timers
-		self.timerZoneLoad = ApolloTimer.Create(4, false, "ZoneLoadTimer", self)
+		self.timerZoneLoad = ApolloTimer.Create(3, false, "ZoneLoadTimer", self)
 		
 		-- Register event handlers
+		Apollo.RegisterEventHandler("ToggleAddon_NN", 				"OpenNN", self)
+
 		Apollo.RegisterEventHandler("HousingNeighborUpdate",		"RefreshList", self)
 		Apollo.RegisterEventHandler("HousingNeighborsLoaded", 		"RefreshList", self)
 		Apollo.RegisterEventHandler("VarChange_ZoneName",			"OnChangeZoneName", self)
 		Apollo.RegisterEventHandler("SubZoneChanged",				"OnChangeZoneName", self)
-		Apollo.RegisterEventHandler("ToggleAddon_NN", 				"OpenNN", self)
+
+		-- Monitor the social window events		
+		Apollo.RegisterEventHandler("EventGeneric_OpenSocialPanel", "OnSocialWindowToggle", self)
+		Apollo.RegisterEventHandler("ToggleSocialWindow", 			"OnSocialWindowToggle", self)
+		Apollo.RegisterEventHandler("SocialWindowHasBeenClosed",	"OnSocialWindowClose", self)
+		Apollo.RegisterEventHandler("GenericEvent_InitializeNeighbors", "OnSocialWindowToggle", self)		
+		
 		Apollo.RegisterEventHandler("InterfaceMenuListHasLoaded", 	"OnInterfaceMenuListHasLoaded", self)
-		Apollo.RegisterEventHandler("WindowMove", 					"OnWindowMove", self)
-				
+		Apollo.RegisterEventHandler("Tutorial_RequestUIAnchor", 	"OnTutorial_RequestUIAnchor", self)
+		
+		-- Register Slash Commands				
 		Apollo.RegisterSlashCommand("neighbornotes", 				"OpenNN", self)
 		Apollo.RegisterSlashCommand("nn", 							"OpenNN", self)
 
-		-- Position window
-		if self.tUserSettings.tWindowLocation then
-			if self.tUserSettings.tWindowLocation.nOffsets[3] ~= 0 and self.tUserSettings.tWindowLocation.nOffsets[4] ~= 0 then
-				local locWindowLoc = WindowLocation.new(self.tUserSettings.tWindowLocation)
-				self.wndMain:MoveToLocation(locWindowLoc)
-			end
-		end
 		self.timerZoneLoad:Start()
 	end	
 end
 
-function NeighborNotes:OnInterfaceMenuListHasLoaded()
-	Event_FireGenericEvent("InterfaceMenuList_NewAddOn", "Neighbor Notes", { "ToggleAddon_NN", "", "IconSprites:Icon_Windows32_UI_CRB_InterfaceMenu_SupportTicket"})
-end
 
-function NeighborNotes:OnWindowMove()
-	local locWindowLocation = self.wndMain and self.wndMain:GetLocation() or self.locSavedWindowLoc	
-	self.tUserSettings.tWindowLocation = locWindowLocation and locWindowLocation:ToTable() or nil
-end
-	
+-- Saves data when the game is closed, or when the UI is reloaded
 function NeighborNotes:OnSave(eType)
 	local tSave = {}
 	if eType == GameLib.CodeEnumAddonSaveLevel.Realm then
@@ -365,10 +374,6 @@ function NeighborNotes:OnSave(eType)
 	end
 	
 	if eType == GameLib.CodeEnumAddonSaveLevel.Character then
-		-- save the window location
-		local locWindowLocation = self.wndMain and self.wndMain:GetLocation() or self.locSavedWindowLoc	
-		self.tUserSettings.tWindowLocation = locWindowLocation and locWindowLocation:ToTable() or nil
-		
 		tSave = {
 			nSettingsVersion = knSettingsVersion,
 			tUserSettings = self.tUserSettings,
@@ -378,93 +383,117 @@ function NeighborNotes:OnSave(eType)
 	return tSave
 end
 
+-- Loads data when the game is closed, or when the UI is reloaded
 function NeighborNotes:OnRestore(eType, tLoad)
 	if not tLoad then
 		return
 	end
 	if eType == GameLib.CodeEnumAddonSaveLevel.Realm then
 		if knNeighborListVersion == tLoad.nNeighborListVersion then
-			self.tNeighborNotes = tLoad.tNeighborNotes
+			if not tLoad.tNeighborNotes then
+				self.tNeighborNotes = {}
+			else
+				self.tNeighborNotes = tLoad.tNeighborNotes
+			end
+			-- check for missing data
+			for strNeighborName, tData in pairs(self.tNeighborNotes) do
+				if not tData.strNote then
+					tData.strNote = ""
+				end
+				if not tData.nNodeType then
+					tData.nNodeType = 0
+				else
+				end
+				if not tData.nNodeID then
+					tData.nNodeID = 0
+				end
+				if not tData.nNodeWeight then
+					tData.nNodeWeight = 0
+				end
+				if not tData.nPlugWeight then
+					tData.nPlugWeight = 0
+				end
+				if not tData.nPlugs then
+					tData.nPlugs = {}
+				end
+				if tData.nNodeWeight == 0 and tData.nNodeType ~= 0 then
+					tData.nNodeWeight = tData.nNodeType * 10 + tData.nNodeID
+				end
+			end
+		else
+			self.tNeighborNotes = {}
 		end
 	elseif eType == GameLib.CodeEnumAddonSaveLevel.Character then
+		self.tUserSettings = ktDefaultUserSettings
 		if knSettingsVersion == tLoad.nSettingsVersion then
-			self.tUserSettings = tLoad.tUserSettings
-		else
-			self.tUserSettings = ktDefaultSettings
-		end
-		-- Load the window location
-		if self.tUserSettings.tWindowLocation then
-			if self.wndMain then
-				local locWindowLoc = WindowLocation.new(self.tUserSettings.tWindowLocation)
-				self.wndMain:MoveToLocation(locWindowLoc)
+			if tLoad.tUserSettings.tFilters.bHarvestable ~= nil then
+				self.tUserSettings.tFilters.bHarvestable = tLoad.tUserSettings.tFilters.bHarvestable
+			end
+			if tLoad.tUserSettings.tFilters.bShowAllCharacters ~= nil then
+				self.tUserSettings.tFilters.bShowAllCharacters = tLoad.tUserSettings.tFilters.bShowAllCharacters
+			end
+			if tLoad.tUserSettings.bOpenWithSocial ~= nil then
+				self.tUserSettings.bOpenWithSocial = tLoad.tUserSettings.bOpenWithSocial
+			end
+			if tLoad.tUserSettings.bCloseWithSocial ~= nil then
+				self.tUserSettings.bCloseWithSocial = tLoad.tUserSettings.bCloseWithSocial
+			end
+			if tLoad.tUserSettings.bOnVisitSelectNext ~= nil then
+				self.tUserSettings.bOnVisitSelectNext = tLoad.tUserSettings.bOnVisitSelectNext
 			end
 		end
 	end
 end
 
------------------------------------------------------------------------------------------------
--- Timer Handler Functions
------------------------------------------------------------------------------------------------
-function NeighborNotes:ZoneLoadTimer()
-	-- stop the timer
-	self.timerZoneLoad:Stop()
-	
-	-- see if this zone should be scanned
-	if HousingLib.IsHousingWorld() == false then
-		self.tQueuedUnits = {}
-		return
-	end
-	local next = next
-	if next(self.tQueuedUnits) == nil then
-		return
-	end
-	
-	if self.bNeighborZone == false then
-		return
-	end
-	
-	
-	self.unitPlayerDisposition = GameLib.GetPlayerUnit()
-	if self.unitPlayerDisposition == nill or not self.unitPlayerDisposition:IsValid() then
-		return
-	end
-	
-	local tHarvestNodes = {}
-	local tUnitNodes = {}
-	local nHarvestCount = 0
-	local nUnitCount = 0
-	for id, udUnit in pairs(self.tQueuedUnits) do
-		if udUnit:GetType() == "Harvest" then
-			nHarvestCount = nHarvestCount +1
-			tHarvestNodes[udUnit:GetName()] = 1
-		else
-			local strName = udUnit:GetName()
-			if strName ~= nil and strName ~= "" then
-				tUnitNodes[strName] = 1
-				nUnitCount = nUnitCount + 1
-			end
-		end	
-	end
-	
-	self.tQueuedUnits = {}
-	if nHarvestCount > 0 then
-		NeighborNotes:UpdateNode(tHarvestNodes)
-	end
-	if nUnitCount > 0 then
-		NeighborNotes:UpdatePlugs(tUnitNodes)
-	end
-	NeighborNotes.PostDebug("Neighbor Notes: Finished Gathering info on " .. self.strNeighborName)
+function NeighborNotes:OnConfigure()
+	NeighborNotes:OnConfigBtn()
 end
 
------------------------------------------------------------------------------------------------
--- Event Handler Functions
------------------------------------------------------------------------------------------------
-function NeighborNotes:OnChangeZoneName(oVar, strNewZone)
-	self.strCurrentZone = strNewZone
-	self.bNeighborZone = NeighborNotes:IsNeighborZone()
-	self.timerZoneLoad:Start()
+------------------------------------------------------------------------------------------
+-- Main Draw
+------------------------------------------------------------------------------------------
+function NeighborNotes:Initialize()
+	if not self.wndMain or not self.wndMain:IsValid() then
+		self.wndMain = Apollo.LoadForm(self.xmlDoc, "NeighborListForm", nil, self)
+		if not self.wndMain then
+			Apollo.AddAddonErrorText(self, "Could not load the NeighborNotes window.")
+			return
+		end
+		Event_FireGenericEvent("WindowManagementAdd", {wnd = self.wndMain, strName = "Neighbor Notes"})
+
+		self.wndListContainer = self.wndMain:FindChild("ListContainer")
+		self.wndConfig = self.wndMain:FindChild("ConfigWindow")
+		self.wndMain:FindChild("AddMemberCloseBtn"):SetData(self.wndMain:FindChild("AddWindow"))
+		self.wndMain:FindChild("EditNoteCloseBtn"):SetData(self.wndMain:FindChild("EditNoteWindow"))
+		self.wndMain:FindChild("NodeFilterCloseBtn"):SetData(self.wndMain:FindChild("NodeFilterWindow"))
+		self.wndMain:FindChild("NeighborFilterCloseBtn"):SetData(self.wndMain:FindChild("NeighborFilterWindow"))
+		self.wndMain:FindChild("AccountWideCheckbox"):SetCheck(self.tUserSettings.tFilters.bShowAllCharacters)
+		self.wndMain:FindChild("TradeSkillCheckbox"):SetCheck(self.tUserSettings.tFilters.bHarvestable)
+	
+		if self.locSavedWindowLoc then
+			self.wndMain:MoveToLocation(self.locSavedWindowLoc)
+		end
+	end
 end
 
+-- Shows the Neighbor Notes Window (or hides it if it is already open)
+function NeighborNotes:OpenNN(bShow)
+	if not self.wndMain and bShow ~= false then
+		self:Initialize()
+	elseif self.wndMain:IsShown() and bShow ~= true then
+		self.wndMain:Close()
+		return
+	end
+	self.wndMain:Invoke()
+	self.wndMain:ToFront()
+	self:RefreshList()
+end
+
+------------------------------------------------------------------------------------------
+-- External Event Handlers
+------------------------------------------------------------------------------------------
+
+-- Places units that are fed to the client into a table/queue named self.tQueuedUnits
 function NeighborNotes:OnUnitCreated(unit)
 	if HousingLib.IsHousingWorld() == false then
 		return
@@ -472,10 +501,24 @@ function NeighborNotes:OnUnitCreated(unit)
 	if unit == null or not unit:IsValid() or unit == GameLib.GetPlayerUnit() then
 		return
 	end
-	self.tQueuedUnits[unit:GetId()] = unit
+	table.insert(self.tQueuedUnits, unit)
 end
 
+-- Refreshes the List Container that contains the neighbor data
 function NeighborNotes:RefreshList()
+	if not self.wndMain then
+		return
+	end
+	if self.bVisitor == nil then
+		local addVisitor = Apollo.GetAddon("Visitor")
+		if addVisitor then
+			self.bVisitor = true
+		else
+			self.bVisitor = false
+			self.wndMain:FindChild("TheVisitorBtn"):Show(false)			
+		end
+	end
+	
 	local nPrevId = nil
 	for key, wndOld in pairs(self.wndListContainer:GetChildren()) do
 		if wndOld:FindChild("FriendBtn"):IsChecked() then
@@ -483,43 +526,58 @@ function NeighborNotes:RefreshList()
 		end
 	end
 
+	-- Clear the current list container
 	self.wndListContainer:DestroyChildren()
 	
-	local tNeighbors = HousingLib.GetNeighborList() or {}
-	-- Add data to neighbor table for sorting
+	-- Updates the Neighbor Notes data with the current neighbor list
+	local tNeighbors = HousingLib.GetNeighborList()
+	if not tNeighbors then
+		return
+	end
 	for nIndex, tNeighbor in ipairs(tNeighbors) do
-		tNeighbor.strNote = ""
-		tNeighbor.nNodeWeight = 0
-		tNeighbor.nPlugWeight = 0
-		local tNoteData = self.tNeighborNotes[tNeighbor.strCharacterName]
-		if tNoteData ~= nil then
-			-- Note
-			if tNoteData.strNote ~= nil then
-				tNeighbor.strNote = tNoteData.strNote
-			end
-			-- Node
-			if tNoteData.nNodeType ~= nil and tNoteData.nNodeID ~= nil then
-				tNeighbor.nNodeWeight = tNoteData.nNodeType * 10 + tNoteData.nNodeID
-			end
-			-- Plugs
-			if tNoteData.tPlugs ~= nil then
-				local nCount = 0
-				for nIndex, nPlugID in pairs(tNoteData.tPlugs) do
-					nCount = nCount + 1
-				end 
-				tNeighbor.nPlugWeight = nCount
-			end
+		if tNeighbor.strCharacterName and not self.tNeighborNotes[tNeighbor.strCharacterName] then
+			self.tNeighborNotes[tNeighbor.strCharacterName] = {}
+			self.tNeighborNotes[tNeighbor.strCharacterName].tPlugs = {}
 		end
 	end
-		
+	tNeighbors = nil
+	
+	-- set up the neighbor lookup table
+	--local tSortData = HousingLib.GetNeighborList() or {}
+	local tSortData = {}
+
+	for strName, tNeighbor in pairs(self.tNeighborNotes) do
+		-- check to see if the neighbor is already in the Sort Table
+		tNData = {}
+		tNData.strNote = tNeighbor.strNote or  ""
+		tNData.nNodeType = tNeighbor.nNodeType or 0
+		tNData.nNodeID = tNeighbor.nNodeID or 0
+		tNData.nNodeWeight = tNeighbor.nNodeWeight or 0
+		tNData.nPlugWeight = tNeighbor.nPlugWeight or 0
+		tNData.strCharacterName = strName
+		local tTemp = NeighborNotes:GetNeighborByName(strName)
+		if tTemp then
+			tNData.fLastOnline = tTemp.fLastOnline or 1.0
+			tNData.ePermissionNeighbor = tTemp.ePermissionNeighbor or HousingLib.NeighborPermissionLevel.Normal
+			tNData.nId = tTemp.nId
+		else
+			tNData.fLastOnline = 1.0
+			tNData.ePermissionNeighbor = 999
+		end
+		table.insert(tSortData, tNData)
+	end
+	
+	-- Apply filters
+	tSortData = NeighborNotes:GetFilteredTable(tSortData)
+	
 	-- Do our sort	
 	if self.fnSort then
-		table.sort(tNeighbors, self.fnSort)
+		table.sort(tSortData, self.fnSort)
 	end
 
 	-- Populate the List Container
-	for key, tCurrNeighbor in pairs(tNeighbors) do
-		local wndListItem = Apollo.LoadForm(self.xmlDoc, "FriendForm", self.wndListContainer, self)
+	for key, tCurrNeighbor in pairs(tSortData) do
+		local wndListItem = Apollo.LoadForm(self.xmlDoc, "NeighborListItem", self.wndListContainer, self)
 		wndListItem:SetData(tCurrNeighbor) -- set the full table since we have no direct lookup for neighbors
 		local strColorToUse = kcrOffline
 		if tCurrNeighbor.fLastOnline == 0 then -- online / check for strWorldZone
@@ -590,6 +648,11 @@ function NeighborNotes:RefreshList()
 			wndListItem:FindChild("AccountIcon"):SetTooltip(Apollo.GetString("Neighbors_RoommateTooltip"))
 		end
 
+		wndListItem:FindChild("NotNeighborIcon"):Show(tCurrNeighbor.ePermissionNeighbor == 999)
+		if tCurrNeighbor.ePermissionNeighbor == 999 then
+			wndListItem:FindChild("NotNeighborIcon"):SetTooltip("This is a neighbor of another character")
+		end
+		
 		wndListItem:FindChild("Name"):SetTextColor(strColorToUse)
 
 	end
@@ -599,23 +662,169 @@ function NeighborNotes:RefreshList()
 	self:UpdateControls()
 end
 
------------------------------------------------------------------------------------------------
--- Slash Commands
------------------------------------------------------------------------------------------------
-function NeighborNotes:OpenNN()
-	if self.wndMain:IsShown() then
-		self.wndMain:Show(false)
-	else
-		self:RefreshList()
-		self.wndMain:Show(true)
-		self.wndMain:ToFront()
+-- Updates self.strCurrentZone and self.bNeighborZone with current zone info
+function NeighborNotes:OnChangeZoneName(oVar, strNewZone)
+	self.strCurrentZone = strNewZone
+	self.bNeighborZone = NeighborNotes:IsNeighborZone()
+	self.timerZoneLoad:Start()
+end
+
+function NeighborNotes:OnSocialWindowToggle()
+	if self.tUserSettings.bOpenWithSocial then
+		local wndSocial = Apollo.FindWindowByName("SocialPanelForm")
+		if wndSocial and wndSocial:IsShown() then
+			local locLocation = wndSocial:GetLocation()
+			if wndSocial:FindChild("SplashNeighborsBtn"):IsChecked() then
+				self:OpenNN(true)
+			end
+		end
 	end
 end
 
+function NeighborNotes:OnSocialWindowClose()
+	if self.tUserSettings.bCloseWithSocial then
+		if self.wndMain and self.wndMain:IsShown() then
+			self.wndMain:Close()
+		end
+	end
+end
+
+-- Registers Neighbor Notes with the Interface Menu
+function NeighborNotes:OnInterfaceMenuListHasLoaded()
+	Event_FireGenericEvent("InterfaceMenuList_NewAddOn", "Neighbor Notes", { "ToggleAddon_NN", "", "IconSprites:Icon_Windows32_UI_CRB_InterfaceMenu_SupportTicket"})
+end
+
+function NeighborNotes:OnTutorial_RequestUIAnchor(eAnchor, idTutorial, strPopupText)
+	if not self.wndMain or not self.wndMain:IsValid() then
+		return 
+	end
+
+	local tRect = {}
+	tRect.l, tRect.t, tRect.r, tRect.b = self.wndMain:GetRect()
+	
+	Event_FireGenericEvent("Tutorial_RequestUIAnchorResponse", eAnchor, idTutorial, strPopupText, tRect)
+end
+
+----------------------------------------------------------------------------------------------
+-- Timer Handler Functions
 -----------------------------------------------------------------------------------------------
--- FriendsList Functions
+
+-- When this timer runs, it processes the items in the self.tQueuedUnits table/queue
+function NeighborNotes:ZoneLoadTimer()
+	-- stop the timer
+	self.timerZoneLoad:Stop()
+	-- see if this zone should be scanned
+	if HousingLib.IsHousingWorld() == false then
+		self.tQueuedUnits = {}
+		return
+	end
+
+	if self.bNeighborZone == false then
+		self.tQueuedUnits = {}
+		return
+	end
+	
+	if #self.tQueuedUnits == 0 then
+		Print("No units found in this Neighborhood")
+		return
+	end
+	
+	self.unitPlayerDisposition = GameLib.GetPlayerUnit()
+	if self.unitPlayerDisposition == nill or not self.unitPlayerDisposition:IsValid() then
+		self.tQueuedUnits = {}
+		return
+	end
+
+	self.tActivePlayerSkills = NeighborNotes:GetActiveTradeskills()
+		
+	local tHarvestNodes = {}
+	local tUnitNodes = {}
+	local nHarvestCount = 0
+	local nUnitCount = 0
+	for nIndex, udUnit in pairs(self.tQueuedUnits) do
+		if udUnit:GetType() == "Harvest" then
+			nHarvestCount = nHarvestCount + 1
+			tHarvestNodes[udUnit:GetName()] = 1
+		else
+			local strName = udUnit:GetName()
+			if strName ~= nil and strName ~= "" then
+				--Print(strName) -- Use to get a list of the unit names
+				tUnitNodes[strName] = 1
+				nUnitCount = nUnitCount + 1
+			end
+		end	
+	end
+	
+	self.tQueuedUnits = {}
+	if nHarvestCount > 0 then
+		NeighborNotes:UpdateNode(tHarvestNodes)
+	end
+	if nUnitCount > 0 then
+		NeighborNotes:UpdatePlugs(tUnitNodes)
+	end
+	Print("Neighbor Notes: Finished Gathering info on " .. self.strNeighborName)
+	NeighborNotes:RefreshList()
+end
+
 -----------------------------------------------------------------------------------------------
-function NeighborNotes:OnNeighborSortToggle(wndHandler, wndControl)
+-- NeighborListItem Controls (an individual row in the neighbor list)
+-----------------------------------------------------------------------------------------------
+
+-- this is called when the friend button is pressed
+function NeighborNotes:OnFriendBtn(wndHandler, wndControl, eMouseButton)
+	local tCurrNeighbor = wndControl:GetParent():GetData()
+
+	if tCurrNeighbor == nil then
+		return false
+	end
+
+	for key, wndPlayerEntry in pairs(self.wndListContainer:GetChildren()) do
+		wndPlayerEntry:FindChild("FriendBtn"):SetCheck(wndPlayerEntry:GetData() == tCurrNeighbor)
+	end
+
+	self:UpdateControls()
+end
+
+-- this fires when a friend is unselected
+function NeighborNotes:OnFriendBtnUncheck(wndHandler, wndControl, eMouseButton)
+	local tCurrNeighbor = wndControl:GetParent():GetData()
+
+	if tCurrNeighbor == nil then
+		return false
+	end
+
+	self:UpdateControls()
+end
+
+function NeighborNotes:OnContextMenuOnlyBtn(wndHandler, wndControl)
+	local tCurrNeighbor = wndControl:GetParent():GetData()
+	Event_FireGenericEvent("GenericEvent_NewContextMenuPlayer", self.wndMain, tCurrNeighbor.strCharacterName)
+end
+
+
+-----------------------------------------------------------------------------------------------
+-- NeighborListForm Controls (the whole neighbor list)
+-----------------------------------------------------------------------------------------------
+
+-- When one of the table headers is clicked, this sets up the sort and calls RefreshList()
+function NeighborNotes:OnNeighborSortToggle( wndHandler, wndControl, eMouseButton )
+	
+	-- If the string is blank, assign it "zzzzz" so that it sorts under non-blank strings 
+	function NeighborNotes.SWeight(strNote)
+		if strNote == "" then
+			return "zzzzz"
+		end
+		return strNote
+	end
+	
+	-- if the number is nil, assign it 0 so that it doesn't break the sort
+	function NeighborNotes.NWeight(nNumber)
+		if nNumber == nil then
+			return 0
+		end
+		return nNumber
+	end
+	
 	local bChecked = wndHandler:IsChecked()
 	local strLastChecked = wndHandler:GetName()
 	self.fnSort = nil
@@ -655,22 +864,21 @@ function NeighborNotes:OnNeighborSortToggle(wndHandler, wndControl)
 	self:RefreshList()
 end
 
--- If the string is blank, assign it "zzzzz" so that it sorts under non-blank strings 
-function NeighborNotes.SWeight(strNote)
-	if strNote == "" then
-		return "zzzzz"
+-- When a tab is right clicked, show the associated context window
+function NeighborNotes:OnTabClick(wndHandler, wndControl, eMouseButton)
+	if eMouseButton == GameLib.CodeEnumInputMouse.Right then
+		local wndFilterWindow = wndControl:FindChild("FilterWindow")
+		if wndFilterWindow then
+			wndFilterWindow:SetFocus()
+			wndFilterWindow:Show(true)
+			return
+		end
 	end
-	return strNote
 end
 
--- if the number is nil, assign it 0 so that it doesn't break the sort
-function NeighborNotes.NWeight(nNumber)
-	if nNumber == nil then
-		return 0
-	end
-	return nNumber
-end
-		
+
+-- This is called to update the controls at the bottom of the window, changing the appearance of the buttons
+--	depending on the current location or selected user
 function NeighborNotes:UpdateControls()
 	if not self.wndMain or not self.wndMain:IsValid() then
 		return
@@ -685,65 +893,51 @@ function NeighborNotes:UpdateControls()
 		end
 	end
 
+	local wndHomeBtn = wndControls:FindChild("TeleportHomeBtn")
+	local wndEditNoteBtn = wndControls:FindChild("EditNoteBtn")
+	local wndVisitBtn = wndControls:FindChild("VisitBtn")
+	local wndAddBtn = wndControls:FindChild("AddBtn")
+	
+	wndAddBtn:SetData(nil)
+	
 	-- must be on my skymap to visit; must be on someone else's to return (add button)
-	wndControls:FindChild("TeleportHomeBtn"):Enable(HousingLib.IsHousingWorld())
+	wndHomeBtn:Enable(HousingLib.IsHousingWorld())
 	wndControls:FindChild("HomeDisabledBlocker"):Show(not HousingLib.IsHousingWorld())
 	wndControls:FindChild("VisitDisabledBlocker"):Show(not HousingLib.IsHousingWorld())
 	if HousingLib.IsHousingWorld() == false then
-		wndControls:FindChild("TeleportHomeBtn"):FindChild("TeleportHomeIcon"):SetBGColor(ApolloColor.new(1, 0, 0, .5))
+		wndHomeBtn:FindChild("TeleportHomeIcon"):SetBGColor(ApolloColor.new(1, 0, 0, .5))
 	else
-		wndControls:FindChild("TeleportHomeBtn"):FindChild("TeleportHomeIcon"):SetBGColor(ApolloColor.new(1, 1, 1, 1))
+		wndHomeBtn:FindChild("TeleportHomeIcon"):SetBGColor(ApolloColor.new(1, 1, 1, 1))
 	end
-	if not tCurr or not tCurr.nId then
-		wndControls:FindChild("EditNoteBtn"):Enable(false)
-		wndControls:FindChild("VisitBtn"):Enable(false)
+
+	if not tCurr then
+		wndVisitBtn:Enable(false)
+		wndEditNoteBtn:Enable(false)
 		return
 	end
-
-	wndControls:FindChild("EditNoteBtn"):Enable(tCurr.ePermissionNeighbor ~= HousingLib.NeighborPermissionLevel.Account)
-	wndControls:FindChild("VisitBtn"):Enable(HousingLib.IsHousingWorld())
-
-
-	wndControls:FindChild("EditNoteBtn"):SetData(tCurr)
-	wndControls:FindChild("VisitBtn"):SetData(tCurr)
-end
-
------------------------------------------------------------------------------------------------
--- FriendsListForm Button Functions
------------------------------------------------------------------------------------------------
-function NeighborNotes:OnFriendBtn(wndHandler, wndControl, eMouseButton)
-	local tCurrNeighbor = wndControl:GetParent():GetData()
-
-	if tCurrNeighbor == nil then
-		return false
+	
+	wndEditNoteBtn:SetData(tCurr)
+	wndEditNoteBtn:Enable(true)
+	
+	if not tCurr.nId then
+		wndAddBtn:SetData(tCurr)
+		wndVisitBtn:Enable(false)
+		return
 	end
-
-	for key, wndPlayerEntry in pairs(self.wndListContainer:GetChildren()) do
-		wndPlayerEntry:FindChild("FriendBtn"):SetCheck(wndPlayerEntry:GetData() == tCurrNeighbor)
-	end
-
-	self:UpdateControls()
-end
-
-function NeighborNotes:OnFriendBtnUncheck(wndHandler, wndControl, eMouseButton)
-	local tCurrNeighbor = wndControl:GetParent():GetData()
-
-	if tCurrNeighbor == nil then
-		return false
-	end
-
-	self:UpdateControls()
-end
-
-function NeighborNotes:OnContextMenuOnlyBtn(wndHandler, wndControl)
-	local tCurrNeighbor = wndControl:GetParent():GetData()
-	Event_FireGenericEvent("GenericEvent_NewContextMenuPlayer", self.wndMain, tCurrNeighbor.strCharacterName)
+	
+	wndVisitBtn:Enable(HousingLib.IsHousingWorld())
+	wndVisitBtn:SetData(tCurr)
 end
 
 -- AddNeighbor Sub-Window Functions
 function NeighborNotes:OnAddBtn(wndHandler, wndControl)
 	local wndAdd = wndControl:FindChild("AddWindow")
-	wndAdd:FindChild("AddMemberEditBox"):SetText("")
+	local wndEditBox = wndAdd:FindChild("AddMemberEditBox")
+	local tCurr = wndControl:GetData()
+	wndEditBox:SetText("")
+	if tCurr and not tCurr.nId then
+		wndEditBox:SetText(tCurr.strCharacterName or "")
+	end
 	wndAdd:FindChild("AddMemberEditBox"):SetFocus()
 	wndAdd:Show(true)
 end
@@ -760,14 +954,25 @@ end
 
 -- Visit Button Function
 function NeighborNotes:OnVisitConfirmBtn(wndHandler, wndControl)
-	local tCurrNeighbor = wndControl:GetData()
-
-	if tCurrNeighbor ~= nil then
+	if self.tUserSettings.bOnVisitSelectNext == true then
+		local bFound = false
+		for key, wndTemp in pairs(self.wndListContainer:GetChildren()) do
+			if bFound == false then
+				if wndTemp:FindChild("FriendBtn"):IsChecked() then
+					bFound = true
+					wndTemp:FindChild("FriendBtn"):SetCheck(false)
+				end
+			else
+				wndTemp:FindChild("FriendBtn"):SetCheck(true)
+				break
+			end
+		end	
+	end	
+	local tCurr = wndControl:GetData()
+	if tCurr ~= nil then
 		Apollo.StopTimer("NNLoadDelay")
-		HousingLib.VisitNeighborResidence(tCurrNeighbor.nId)
-
+		HousingLib.VisitNeighborResidence(tCurr.nId)
 	end
-	self.wndMain:Show(false)
 end
 
 -- Home Button Function
@@ -778,65 +983,106 @@ function NeighborNotes:OnTeleportHomeBtn(wndHandler, wndControl)
 end
 
 
----------------------------------------------------------------------------------------------------
--- NeighborListForm Functions
----------------------------------------------------------------------------------------------------
 function NeighborNotes:OnCloseBtn( wndHandler, wndControl, eMouseButton )
 	self.wndMain:Show(false)
 end
 
-local NeighborNotesInst = NeighborNotes:new()
-NeighborNotes:Init()
-
 function NeighborNotes:OnEditNoteBtn( wndHandler, wndControl, eMouseButton )
 	local wndEdit = wndControl:FindChild("EditNoteWindow")
 	local wndEditBox = wndEdit:FindChild("NoteEditBox")
-	local tCurrNeighbor = wndControl:GetData()
-	if tCurrNeighbor == nil then
+	local tCurr = wndControl:GetData()
+	if tCurr == nil then
 		return
 	end
-	--NeighborNotes.PostDebug("Control = " .. wndControl:GetName())
-	if tCurrNeighbor.strCharacterName == nil or tCurrNeighbor.strCharacterName == "" then
+	if tCurr.strCharacterName == nil or tCurr.strCharacterName == "" then
 		return
 	end
-	--NeighborNotes.PostDebug("Name = " .. tCurrNeighbor.strCharacterName)
-	local strNote = self:GetCharacterNote(tCurrNeighbor.strCharacterName)
+	local strNote = self:GetCharacterNote(tCurr.strCharacterName)
 	wndEditBox:SetText(strNote)
 	wndEditBox:SetFocus()
 	wndEdit:Show(true)
 end
 
+
 function NeighborNotes:OnSubCloseBtn(wndHandler, wndControl, mouseBtn)
 	wndControl:GetParent():Show(false)
 end
+
 
 function NeighborNotes:OnNoteSubmitClick( wndHandler, wndControl)
 	local wndParent = wndControl:GetParent()
 	local strNote = wndParent:FindChild("NoteEditBox"):GetText()
 	local tCurrNeighbor = wndParent:GetParent():GetData()
-	--NeighborNotes.PostDebug("Name = " .. tCurrNeighbor.strCharacterName)
 	self:SetCharacterNote(tCurrNeighbor.strCharacterName, strNote)
 	self:RefreshList()
 	wndParent:Show(false)
 end
 
-function NeighborNotes:OnRosterAddMemberCloseBtn( wndHandler, wndControl )
+
+function NeighborNotes:OnTradeSkillCheckBox( wndHandler, wndControl, eMouseButton )
+	self.tUserSettings.tFilters.bHarvestable = wndControl:IsChecked()
+	wndControl:GetParent():Show(false)
+	NeighborNotes:RefreshList()
+end
+
+function NeighborNotes:OnAccountWideCheckBox( wndHandler, wndControl, eMouseButton )
+	self.tUserSettings.tFilters.bShowAllCharacters = wndControl:IsChecked()
+	wndControl:GetParent():Show(false)
+	NeighborNotes:RefreshList()
+end
+
+-- Opens the Node Filter Window
+function NeighborNotes:OnNodeTabClick( wndHandler, wndControl, eMouseButton)
+	local wndNodeFilter = wndControl:FindChild("NodeFilterWindow")
+	if wndNodeFilter ~= nil then
+		if eMouseButton == GameLib.CodeEnumInputMouse.Right then
+			wndNodeFilter:SetFocus()
+			wndNodeFilter:Show(true)
+		end
+	end
+end
+
+
+function NeighborNotes:OnSubWindowClosed( wndHandler, wndControl )
+	wndControl:GetParent():SetCheck(false)
+end
+
+function NeighborNotes:OnConfigBtn( wndHandler, wndControl, eMouseButton )
+	if self.wndConfig and self.wndConfig:IsShown() then
+		self.wndConfig:Close()
+		return
+	elseif not self.wndConfig or not self.wndConfig:IsValid() then
+		self.wndConfig = Apollo.LoadForm(self.xmlDoc, "ConfigWindow", nil, self)
+	end
+	local wndContent = self.wndConfig:FindChild("ContentMain")
+	wndContent:FindChild("CheckboxOpenWithSocial"):SetCheck(self.tUserSettings.bOpenWithSocial)
+	wndContent:FindChild("CheckboxCloseWithSocial"):SetCheck(self.tUserSettings.bCloseWithSocial)
+	wndContent:FindChild("CheckboxShowAllNeighbors"):SetCheck(self.tUserSettings.tFilters.bShowAllCharacters)
+	wndContent:FindChild("CheckboxShowHarvestable"):SetCheck(self.tUserSettings.tFilters.bHarvestable)
+	wndContent:FindChild("CheckboxVisitNext"):SetCheck(self.tUserSettings.bOnVisitSelectNext)
+	self.wndConfig:Show(true)
+	self.wndConfig:ToFront()
+end
+
+function NeighborNotes:OnVisitRandomBtn( wndHandler, wndControl, eMouseButton )
+	Event_FireGenericEvent("HousingRandomResidenceListReceived", self.wndMain, nil)
+end
+
+function NeighborNotes:OnTheVisitorBtn( wndHandler, wndControl, eMouseButton )
+	Apollo.ParseInput("/visit")	
 end
 
 ---------------------------------------------------------------------------------------------------
--- General Functions
+-- tNeighborNotes datatable access functions
 ---------------------------------------------------------------------------------------------------
 
-function NeighborNotes.PostDebug(strMessage)
-	ChatSystemLib.PostOnChannel(3, strMessage)
-end	
-
+-- Returns the text note based on the character name
 function NeighborNotes:GetCharacterNote(strCharacterName)
-	--NeighborNotes.PostDebug("Name = " .. strCharacterName)
 	if strCharacterName == nil then
 		return ""
 	end
 	if self.tNeighborNotes == nil then
+		Print("Can't access the Neighbor Notes data table")
 		Apollo.AddAddonErrorText("Can't access the neighbornotes table")
 	end	
 	if self.tNeighborNotes[strCharacterName] ~= nil and self.tNeighborNotes[strCharacterName].strNote ~= nil then
@@ -845,6 +1091,7 @@ function NeighborNotes:GetCharacterNote(strCharacterName)
 	return ""
 end
 
+-- Sets the text note for the specified character
 function NeighborNotes:SetCharacterNote(strCharacterName, strNote)
 	if self.tNeighborNotes[strCharacterName] == nil then
 		self.tNeighborNotes[strCharacterName] = {}
@@ -852,36 +1099,7 @@ function NeighborNotes:SetCharacterNote(strCharacterName, strNote)
 	self.tNeighborNotes[strCharacterName].strNote = strNote
 end
 
-function NeighborNotes:GetNameFromZone(strZoneName)
-	-- we need to find the block brackets
-	local nFirst = strZoneName:find('%[', 1)
-	if nFirst == nil then
-		return ""
-	end
-	local nLast = strZoneName:find('%]', 1)
-	return strZoneName:sub(nFirst + 1, nLast -1)
-end
-
-function NeighborNotes:IsNeighborZone()
-	--NeighborNotes.PostDebug("Zone Name is " .. self.strCurrentZone)
-	local strNeighborName = NeighborNotes:GetNameFromZone(self.strCurrentZone)
-	if(strNeighborName == "") then
-		self.bNeighborZone = false
-		return false
-	end
-	--NeighborNotes.PostDebug("Neighbor Name is " .. strNeighborName)
-	local tNeighborList = HousingLib.GetNeighborList()
-	local isNeighbor = false
-	for key, tCurrNeighbor in pairs(tNeighborList) do
-		if tCurrNeighbor.strCharacterName == strNeighborName then
-			isNeighbor = true
-			self.strNeighborName = strNeighborName
-			break
-		end
-	end
-	return isNeighbor
-end
-
+-- Updates the node of the current Neighbor node
 function NeighborNotes:UpdateNode(tUnitNames)
 	local nBest = 0
 	local nType = 0
@@ -918,23 +1136,29 @@ function NeighborNotes:UpdateNode(tUnitNames)
 		end
 	end
 	if nBest ~= 0 and nBest ~= nil then
-		--NeighborNotes.PostDebug("Type=" .. nType .. " ID=" .. nBest)
 		if self.tNeighborNotes[self.strNeighborName] == nil then
 			self.tNeighborNotes[self.strNeighborName] = {}
 		end
+		if self.tNeighborNotes[self.strNeighborName].nNodeType ~= nil and self.tNeighborNotes[self.strNeighborName].nNodeType == nType then
+			if self.tNeighborNotes[self.strNeighborName].nNodeID >= nBest then
+				return
+			end
+		end
 		self.tNeighborNotes[self.strNeighborName].nNodeType = nType;
 		self.tNeighborNotes[self.strNeighborName].nNodeID = nBest;
+		-- Calculate node weight
+		self.tNeighborNotes[self.strNeighborName].nNodeWeight = nType * 10 + nBest
 	end
 end
 
+-- Replaces the existing Plugs with the list provided in tUnitNames
 function NeighborNotes:UpdatePlugs(tUnitNames)
 	local tNewPlugs = {}
 	-- Build a current list of plugs
 	for strUnitName, nNum in pairs(tUnitNames) do
 		if strUnitName ~= nil and strUnitName ~= "" then
-			local nPlugID = NeighborNotes:GetPlugID(strUnitName)
-			if nPlugID ~= "" then
-				--NeighborNotes.PostDebug("Found Plug: " .. nPlugID)
+			local nPlugID = ktPlugUnitLookup[strUnitName]
+			if nPlugID ~= nil then
 				tNewPlugs[nPlugID] = 1
 			end
 		end
@@ -953,17 +1177,129 @@ function NeighborNotes:UpdatePlugs(tUnitNames)
 			self.tNeighborNotes[self.strNeighborName] = {}
 		end
 		self.tNeighborNotes[self.strNeighborName].tPlugs = tOrdered
+		self.tNeighborNotes[self.strNeighborName].nPlugWeight = nCount
 	else
-		if self.tNeighborNotes[self.strNeighborName] ~= nil then
-			self.tNeighborNotes[self.strNeighborName].tPlugs = nil
-		end
+		self.tNeighborNotes[self.strNeighborName].tPlugs = {}
+		self.tNeighborNotes[self.strNeighborName].nPlugWeight = 0
 	end
 end
 
-function NeighborNotes:GetPlugID(strUnitName)
-	local nPlugID = ktPlugUnitLookup[strUnitName]
-	if nPlugID == nil then
-		return ""
+-- Determines if this zone is the zone of a neighbor
+function NeighborNotes:IsNeighborZone()
+	self.bNeighborZone = false
+	self.strNeighborName = ""
+	local nFirst = self.strCurrentZone:find('%[', 1)
+	local nLast = self.strCurrentZone:find('%]', 1)
+	if nFirst ~= nil and nLast ~= nil then
+		local strNeighborName = self.strCurrentZone:sub(nFirst + 1, nLast -1)
+		if(strNeighborName ~= "") then
+			local tNeighborList = HousingLib.GetNeighborList()
+			local isNeighbor = false
+			for key, tCurrNeighbor in pairs(tNeighborList) do
+				if tCurrNeighbor.strCharacterName == strNeighborName then
+					self.bNeighborZone = true
+					self.strNeighborName = strNeighborName
+					break
+				end
+			end
+		end
 	end
-	return nPlugID
+	return self.bNeighborZone
 end
+
+-- Returns the neighbor info for strName from HousingLib.GetNeighborList()
+function NeighborNotes:GetNeighborByName(strName)
+	if strName ~= nil and strName ~= "" then
+		tNeighborList = HousingLib.GetNeighborList()
+		for nIndex, tNeighbor in ipairs(tNeighborList) do
+			if tNeighbor.strCharacterName == strName then
+				return tNeighbor
+			end
+		end	
+	end
+	-- no neighbor found
+	return nil
+end
+
+-- Applies filters from self.tUserSettings.tFilters to the table tNeighborList
+function NeighborNotes:GetFilteredTable(tNeighborList)
+	local tRemoveList = {}
+	local strCharName = GameLib.GetPlayerUnit():GetName()
+	local tActiveSkills = NeighborNotes:GetActiveTradeskills()
+
+	tRemoveList[strCharName] = true
+	
+	for nIndex, tNeighbor in ipairs(tNeighborList) do
+		if self.tUserSettings.tFilters.bShowAllCharacters == false then
+			if not NeighborNotes:GetNeighborByName(tNeighbor.strCharacterName) then
+				tRemoveList[tNeighbor.strCharacterName] = true
+			end
+		end
+		if self.tUserSettings.tFilters.bHarvestable == true then
+			if tNeighbor.nNodeType == ktNodeType["Relic"] and tActiveSkills["Relic"] then
+				-- do nothing
+			elseif tNeighbor.nNodeType == ktNodeType["Survival"] and tActiveSkills["Survival"] then
+				-- do nothing
+			elseif tNeighbor.nNodeType == ktNodeType["Mining"] and tActiveSkills["Mining"] then
+				-- do nothing
+			else
+				tRemoveList[tNeighbor.strCharacterName] = true
+			end
+		end
+	end
+	
+	-- Build the return list
+	local tReturnList = {}
+	for nIndex, tNeighbor in ipairs(tNeighborList) do
+		if not tRemoveList[tNeighbor.strCharacterName] then
+			table.insert(tReturnList, tNeighbor)
+		end
+	end
+	return tReturnList
+end
+
+-- returns a table with tradeskill names as the index.  Inactive skills are excluded
+function NeighborNotes:GetActiveTradeskills()
+	local tReturnList = {}
+	local tKnownSkills = CraftingLib.GetKnownTradeskills()
+	if tKnownSkills then
+		for nIndex, tSkill in ipairs(tKnownSkills) do
+			local tInfo = CraftingLib.GetTradeskillInfo(tSkill.eId)
+			if tInfo and tInfo.bIsActive then
+				if tSkill.strName == "Relic_Hunter" then
+					tReturnList["Relic"] = true
+				elseif tSkill.strName == "Survivalist" then
+					tReturnList["Survival"] = true
+				elseif tSkill.strName == "Mining" then
+					tReturnList["Mining"] = true
+				end
+			end
+		end
+	end
+	return tReturnList
+end
+
+---------------------------------------------------------------------------------------------------
+-- ConfigWindow Functions
+---------------------------------------------------------------------------------------------------
+
+function NeighborNotes:OnConfigOK( wndHandler, wndControl, eMouseButton)
+	local wndContent = wndControl:GetParent():FindChild("ContentMain")
+	self.tUserSettings.bOpenWithSocial = wndContent:FindChild("CheckboxOpenWithSocial"):IsChecked()
+	self.tUserSettings.bCloseWithSocial = wndContent:FindChild("CheckboxCloseWithSocial"):IsChecked()
+	self.tUserSettings.tFilters.bShowAllCharacters = wndContent:FindChild("CheckboxShowAllNeighbors"):IsChecked()
+	self.tUserSettings.tFilters.bHarvestable = wndContent:FindChild("CheckboxShowHarvestable"):IsChecked()
+	self.tUserSettings.bOnVisitSelectNext = wndContent:FindChild("CheckboxVisitNext"):IsChecked()
+	self.wndConfig:Close()
+	NeighborNotes:RefreshList()
+end
+
+function NeighborNotes:OnConfigCancel( wndHandler, wndControl, eMouseButton )
+	self.wndConfig:Close()
+end
+
+-- Initialize the Addon
+local NeighborNotesInst = NeighborNotes:new()
+NeighborNotes:Init()
+
+
