@@ -1,8 +1,9 @@
 ------------------------------------------------------------------------------------------------
 -- Client Lua Script for AMPFinder
 -- 2014-04-19, Tomii
--- version 1.5.6, 2014-06-22
+-- version 1.6.1, 2014-07-02
 
+-- TODO: Save/restore window position. Kinda works but doesn't handle compact windows well.
 -- TODO: Get NPC data rather than hardcoding their names
 -- TODO: Localize text when possible
 -- TODO: Put prices (via item reference tCost?) on the pane as a swappable option
@@ -179,6 +180,12 @@ local kiAmpCategory = 2
 local kiAmpRank = 3
 local kiLocation = 4
 local kiItemId = 5
+
+local ktUserPrefs = {
+	"strFilter",
+	"bWindowOpen",
+	"bCompact",
+}
 
 -- [spellID] = {imbueSpellID, category, rank, knLocation},
 local AllAmpData = {		
@@ -518,7 +525,8 @@ function AMPFinder:OnDocumentReady()
 	self.wndAMPFilter = nil
 	self.wndAMPTooltip = nil
 	self.timerTooltip = nil
-	self.strFilter = ""
+	if (self.bWindowOpen == nil) then self.bWindowOpen = false end
+	if (self.strFilter == nil) then self.strFilter = "" end
 	self.nUserSelectedPane = 0
 	self.nDisplayedPane = 0
 	self.TimerSpeed = knSlowDelay
@@ -527,7 +535,7 @@ function AMPFinder:OnDocumentReady()
 	self.nHeading = 0
 	self.wndHover = nil
 	self.wndLeave = nil
-	self.bCompact = false
+	if (self.bCompact == nil) then self.bCompact = false end
 	self.nCompleteDisplayMode = 1
 	self.bInitialShow = true
 	self.bAmpLocations = false
@@ -589,7 +597,7 @@ function AMPFinder:SetAmpLocations()
 	if (faction == nil) then return false end
 
 	self.nClass = intClass
-	self.nClassDisplayed = intClass -- TODO: switch to this in future
+	self.nClassDisplayed = intClass
 	self.nFaction = faction
 
 	self.tMyClassAmps = AllAmpData[intClass]
@@ -644,7 +652,6 @@ end
 function AMPFinder:CompleteHookup()
 	-- Run by SetAmpLocations as the final stage of setup
 
-	self.strFilter = ""
 	self:HookAMPTooltips()
 	self:HookVendorLists()
 	
@@ -667,11 +674,49 @@ function AMPFinder:CompleteHookup()
 	self:HookPosTrack(false)
 	
 	self:UpdatePane()
+	
+	-- todo: debug
+	-- if (self.bWindowOpen == true) then self.wndMain:Show(true) end
 end
 
 --------------------------------------------------
 -- Utility functions 
 --------------------------------------------------
+
+local function round(n) 
+	return math.floor(n + 0.5)
+end
+
+-- Other addons can override these functions if desired~
+local function GetAbilityAMPsAddon() 
+	local tAddon
+	tAddon = Apollo.GetAddon("AbilityAMPs")
+	if (tAddon) then return tAddon end
+	tAddon = Apollo.GetAddon("GorynychAbilityAMPs")
+	if (tAddon) then return tAddon end
+	return nil
+end
+
+local function GetVendorAddon() 
+	local tAddon
+	tAddon = Apollo.GetAddon("Vendor")
+	if (tAddon) then return tAddon end
+	return nil
+end
+
+local function GetTooltipsAddon() 
+	local tAddon
+	tAddon = Apollo.GetAddon("ToolTips")
+	if (tAddon) then return tAddon end
+	return nil
+end
+
+local function GetOptionsAddon() 
+	local tAddon
+	tAddon = Apollo.GetAddon("OptionsInterface")
+	if (tAddon) then return tAddon end
+	return nil
+end
 
 -- returns 2 if complete, 1 if in progress, 0 if nothing
 local function GetQuestStatus(quest)
@@ -858,7 +903,7 @@ end
 
 function AMPFinder:HookAMPWindow()
 
-	local tAbilityAMPs = Apollo.GetAddon("AbilityAMPs")
+	local tAbilityAMPs = GetAbilityAMPsAddon() -- Apollo.GetAddon("AbilityAMPs")
 	if (tAbilityAMPs == nil) then return end -- can't hook if the addon isn't there
 	
 	-- change unlocked but non-prerequisited AMPs to blue
@@ -868,7 +913,7 @@ function AMPFinder:HookAMPWindow()
 		origRedrawSelections(tEldanAugmentationData)
 		
 		-- self = AbilityAMPs table
-		self.wndAMPFilter = Apollo.LoadForm(self.xmlDoc, "AmpFilterForm", tAbilityAMPs.wndMain, self)		
+		self.wndAMPFilter = Apollo.LoadForm(self.xmlDoc, "AmpFilterForm", tAbilityAMPs.tWndRefs.wndMain, self)		
 
 		local fBox = self.wndAMPFilter:FindChild("FilterBox")
 		if (fBox ~= nil) then
@@ -904,7 +949,17 @@ local function repositionAugmentationTooltip(wndTooltip)
 	end
 end
 
-
+local function formatLocation(tLocationData, bCX)
+	local strVendorName = tLocationData[5]
+	if (bCX) then strVendorName = "the " .. Apollo.GetString("MarketplaceCommodity_CommoditiesExchange") end	
+	
+	return strVendorName
+		.." in "..tLocationData[2]
+		..", "..tLocationData[1]							
+		.." ("..round(tLocationData[3])
+		..", "..round(tLocationData[4])
+		..")"
+end
 
 local function extendAugmentationTooltip(wndTooltip, wndControl, tAmp)
 	-- if amp locations have not been set then we can't give meaningful feedback
@@ -943,12 +998,7 @@ local function extendAugmentationTooltip(wndTooltip, wndControl, tAmp)
 			
 			if (IsKeyComplete(knPaneCelestionQ) == false) and (IsKeyComplete(knPaneDeraduneQ) == false) then
 				local tLocationData1 = tAmpFinder.LocationToVendor[knLocGlenview][1]
-				strLoc = strLoc..tLocationData1[5]
-				.." in "..tLocationData1[2]
-				..", "..tLocationData1[1]							
-				.." ("..tLocationData1[3]
-				..", "..tLocationData1[4]
-				..")"
+				strLoc = strLoc .. formatLocation(tLocationData1, false)
 				nCount = nCount+1
 			end
 			
@@ -956,41 +1006,25 @@ local function extendAugmentationTooltip(wndTooltip, wndControl, tAmp)
 				if (nCount >= 1) then strLoc = strLoc..", from " end
 				
 				local tLocationData2 = tAmpFinder.LocationToVendor[knLocTremor][1]
-				strLoc = strLoc..tLocationData2[5]
-				.." in "..tLocationData2[2]
-				..", "..tLocationData2[1]							
-				.." ("..tLocationData2[3]
-				..", "..tLocationData2[4]
-				..")"
+				strLoc = strLoc .. formatLocation(tLocationData2, false)
 				nCount = nCount + 1
 			end
 			
 			if (nCount >= 1) then strLoc = strLoc.." or from " end
 			tLocationData = tAmpFinder.LocationToVendor[knLocCommodity][1]
-			strLoc = strLoc .. "the Commodities Exchange"
-				.." in "..tLocationData[2]..", "..tLocationData[1]
-				.." ("..tLocationData[3]..", "..tLocationData[4]..")"
+			strLoc = strLoc .. formatLocation(tLocationData, true)
 			
 		elseif (nLocation == knLocGallowSylvan) then
 			tLocationData1 = tAmpFinder.LocationToVendor[knLocGallow][1]
 			tLocationData2 = tAmpFinder.LocationToVendor[knLocSylvan][1]
-			strLoc = "AMP is locked. Can be obtained from "..tLocationData1[5]
-				.." in "..tLocationData1[2]
-				..", "..tLocationData1[1]							
-				.." ("..tLocationData1[3]
-				..", "..tLocationData1[4]
-				..") or from "..tLocationData2[5]
-				.." in "..tLocationData2[2]
-				..", "..tLocationData2[1]							
-				.." ("..tLocationData2[3]
-				..", "..tLocationData2[4]
-				..")"
+			strLoc = "AMP is locked. Can be obtained from "
+				.. formatLocation(tLocationData1, false)
+				.. formatLocation(tLocationData2, false)
 				
 		elseif (nLocation == knLocUnknown) then
 			tLocationData = tAmpFinder.LocationToVendor[knLocCommodity][1]
-			strLoc = "AMP is locked. May be for sale at the Commodities Exchange"
-				.." in "..tLocationData[2]..", "..tLocationData[1]
-				.." ("..tLocationData[3]..", "..tLocationData[4]..")"
+			strLoc = "AMP is locked. May be for sale at "
+				.. formatLocation(tLocationData, true)
 		
 		elseif (nLocation ~= nil) then
 			-- tLocRecord shouldn't be nil, but it is seeming to be... 
@@ -1002,23 +1036,17 @@ local function extendAugmentationTooltip(wndTooltip, wndControl, tAmp)
 			local tLocRecord = tAmpFinder.LocationToVendor[nLocation]
 			if (tLocRecord ~= nil) then tLocationData = tLocRecord[1] end
 			if (tLocationData ~= nil) then
-				strLoc = "AMP is locked. Can be obtained from "..tLocationData[5]
-					.." in "..tLocationData[2]
-					..", "..tLocationData[1]							
-					.." ("..tLocationData[3]
-					..", "..tLocationData[4]
-					..")"
+				strLoc = "AMP is locked. Can be obtained from "
+					.. formatLocation(tLocationData, false)
 			else 
 				tLocationData = tAmpFinder.LocationToVendor[knLocCommodity][1]
-				strLoc = "AMP is locked. May be for sale at the Commodities Exchange"
-					.." in "..tLocationData[2]..", "..tLocationData[1]
-					.." ("..tLocationData[3]..", "..tLocationData[4]..")"
+				strLoc = "AMP is locked. May be for sale at "
+					.. formatLocation(tLocationData, true)
 			end		
 		else 
 			tLocationData = tAmpFinder.LocationToVendor[knLocCommodity][1]
-			strLoc = "AMP is locked. May be for sale at the Commodities Exchange"
-					.." in "..tLocationData[2]..", "..tLocationData[1]
-					.." ("..tLocationData[3]..", "..tLocationData[4]..")"
+			strLoc = "AMP is locked. May be for sale at "
+					.. formatLocation(tLocationData, true)
 		end
 		
 		wndTooltip:FindChild("DescriptionLabelWindow"):SetAML(
@@ -1036,7 +1064,7 @@ local function extendAugmentationTooltip(wndTooltip, wndControl, tAmp)
 end
 
 function AMPFinder:HookAMPTooltips()
-	local tAbilityAMPs = Apollo.GetAddon("AbilityAMPs")
+	local tAbilityAMPs = GetAbilityAMPsAddon() -- Apollo.GetAddon("AbilityAMPs")
 	if (tAbilityAMPs == nil) then return end -- can't hook if the addon isn't there
 
 	-- extend AMP Dialog tooltip
@@ -1049,7 +1077,7 @@ function AMPFinder:HookAMPTooltips()
 end
 
 function AMPFinder:HookVendorLists()
-	local tVendor = Apollo.GetAddon("Vendor")
+	local tVendor = GetVendorAddon() -- Apollo.GetAddon("Vendor")
 	if (tVendor == nil) then return end
 	local origVendorItems = tVendor.DrawListItems
 	tVendor.DrawListItems = function(luaCaller, wndParent, tItems)
@@ -1069,7 +1097,6 @@ function AMPFinder:HookVendorLists()
 					local wndItemLabel = wndItem:FindChild("VendorListItemTitle")
 	
 					if (intFound == 2) then				
-						-- wndItemLabel:SetText(tCurrItem.itemData:GetName().." (already unlocked)")
 						wndItemLabel:SetText(String_GetWeaselString(Apollo.GetString("Vendor_KnownRecipe"), 
 							tCurrItem.itemData:GetName() )  )
 					end	
@@ -1082,7 +1109,7 @@ function AMPFinder:HookVendorLists()
 end
 
 function AMPFinder:HookTooltips()
-	local tTooltips = Apollo.GetAddon("ToolTips")
+	local tTooltips = GetTooltipsAddon() -- Apollo.GetAddon("ToolTips")
 	if (tTooltips == nil) then return end  -- ditch this procedure if user is using a different tooltip mod
 	
 	-- CreateCallNames is run right after a tooltip is instantiated.
@@ -1120,6 +1147,46 @@ end
 -----------------------------------------------
 -- Many whelps, handle it
 -----------------------------------------------
+
+function AMPFinder:OnSave(eType)
+	if (eType ~= GameLib.CodeEnumAddonSaveLevel.Account) then return end
+
+	self.bWindowOpen = self.wndMain:IsShown()
+	
+	local tSaveData = {}
+	for idx,property in ipairs(ktUserPrefs) do
+		tSaveData[property] = self[property]
+	end
+	
+	return tSaveData
+end
+
+function AMPFinder:OnRestore(eType, tSavedData)
+	if (eType ~= GameLib.CodeEnumAddonSaveLevel.Account) then return end
+	
+	for idx,property in ipairs(ktUserPrefs) do
+		if tSavedData[property] ~= nil then
+			self[property] = tSavedData[property]
+		end
+	end
+	
+	-- todo: debug
+	-- if (self.wndMain ~= nil) then
+
+		-- self.wndMain:Show(self.bWindowOpen)
+		-- if (self.bCompact) then 
+		-- 	self:CompactWindow() 
+			-- self.bInitialShow = false
+			-- self:OnWindowShow()
+		-- end
+	-- end
+	
+	if (self.wndAMPFilter == nil) then return end  -- The restore could happen before the filter is hooked
+	local fBox = self.wndAMPFilter:FindChild("FilterBox")
+	if (fBox ~= nil) then
+		fBox:SetText(self.strFilter)
+	end
+end
 
 function AMPFinder:OnWindowManagementReady()
     Event_FireGenericEvent("WindowManagementAdd", {wnd = self.wndMain, strName = "AMP Finder"})
@@ -1170,10 +1237,10 @@ function AMPFinder:UpdateAMPWindow(filter)
 		filter = string.lower(filter)
 	end
 	
-	local tAbilityAMPs = Apollo.GetAddon("AbilityAMPs")
+	local tAbilityAMPs = GetAbilityAMPsAddon() -- Apollo.GetAddon("AbilityAMPs")
 	if (tAbilityAMPs == nil) then return end -- nothing to do if the addon isn't there
 	local cnt = 0
-	local wndAMPs = tAbilityAMPs.wndMain:FindChild("ScrollContainer:Amps")
+	local wndAMPs = tAbilityAMPs.tWndRefs.wndMain:FindChild("ScrollContainer:Amps")
 	for idx, wndAmp in pairs(wndAMPs:GetChildren()) do
 		local tAmp = wndAmp:GetData()
 		local ampname = string.lower(tAmp.strTitle)
@@ -1724,7 +1791,7 @@ end
 function AMPFinder:AddConditionVendor(wndParent, nTop, nVendorTag)
 	local tVendorData = self.LocationToVendor[nVendorTag][1]
 	local wndCurr = Apollo.LoadForm(self.xmlDoc, "Condition", wndParent, self)
-	wndParent:FindChild("AddInfo"):SetText(tVendorData[2].."\n("..tVendorData[3]..","..tVendorData[4]..")")
+	wndParent:FindChild("AddInfo"):SetText(tVendorData[2].."\n("..round(tVendorData[3])..","..round(tVendorData[4])..")")
 	wndCurr:FindChild("ConditionField"):SetText(tVendorData[5])
 	wndCurr:FindChild("ConditionField"):SetFont("CRB_InterfaceMedium_BO")
 	wndCurr:SetAnchorOffsets(0, nTop, 0, nTop+25)
@@ -1739,7 +1806,7 @@ function AMPFinder:AddConditionQuestgiver(wndParent, nTop, nVendorTag, nZoneTag)
 		tEp[kiEpisodeQuest1], tEp[kiEpisodeQuest2], tEp[kiEpisodeQuest3]
 		
 	local wndCurr = Apollo.LoadForm(self.xmlDoc, "Condition", wndParent, self)
-	wndParent:FindChild("AddInfo"):SetText(tVendorData[2].."\n("..tVendorData[3]..","..tVendorData[4]..")")
+	wndParent:FindChild("AddInfo"):SetText(tVendorData[2].."\n("..round(tVendorData[3])..","..round(tVendorData[4])..")")
 	wndCurr:FindChild("ConditionField"):SetText("Quests from "..strQgiver)
 	wndCurr:FindChild("ConditionField"):SetTooltip("Questline begins with this questgiver.")
 	wndCurr:FindChild("ConditionField"):SetFont("CRB_InterfaceMedium_BO")
@@ -2037,7 +2104,7 @@ function AMPFinder:UpdateArrowVendor(bForceUpdate) -- (wndVendor, wndParent)
 		if (tVendorData == nil) then return end  -- bugcheck
 		
 		-- TODO: Cache text changes so we aren't changing the vendor constantly
-		wndVendor:FindChild("AddInfo"):SetText(tVendorData[2].."\n("..tVendorData[3]..","..tVendorData[4]..")")
+		wndVendor:FindChild("AddInfo"):SetText(tVendorData[2].."\n("..round(tVendorData[3])..","..round(tVendorData[4])..")")
 		wndParent:FindChild("ConditionField"):SetText(tVendorData[5]);
 			
 		local strSpriteName
@@ -2363,7 +2430,7 @@ function AMPFinder:OnCompactShrink( wndHandler, wndControl, eMouseButton )
 	self.wndMain:SetAnchorOffsets(nLeft+83, nTop+24, nLeft+83+245, nTop+24+100)
 
 	-- thanks to sinaloit :)	
-	local OptInterface = Apollo.GetAddon("OptionsInterface")
+	local OptInterface = GetOptionsAddon() -- Apollo.GetAddon("OptionsInterface")
 	if (OptInterface ~= nil) then
 	    OptInterface:UpdateTrackedWindow(self.wndMain)
 	end
@@ -2377,7 +2444,7 @@ function AMPFinder:OnCompactRestore( wndHandler, wndControl, eMouseButton )
 	self.wndMain:SetAnchorOffsets(nLeft-83, nTop-24, nLeft-83+386, nTop-24+421)
 	
 	-- thanks to sinaloit :)
-	local OptInterface = Apollo.GetAddon("OptionsInterface")
+	local OptInterface = GetOptionsAddon() -- Apollo.GetAddon("OptionsInterface")
 	if (OptInterface ~= nil) then
 	    OptInterface:UpdateTrackedWindow(self.wndMain)
 	end
@@ -2385,7 +2452,6 @@ end
 
 function AMPFinder:OnWindowShow( wndHandler, wndControl )
 	if (self.bInitialShow == false) then return end
-	
 	self.bInitialShow = false
 
 	local nLeft, nTop, nRight, nBottom = self.wndMain:GetAnchorOffsets()
@@ -2398,26 +2464,7 @@ function AMPFinder:OnWindowShow( wndHandler, wndControl )
 		self.wndMain:FindChild("CompactBtn"):SetCheck(true)
 		self:UnCompactWindow()
 	end
-end
-
----------------------------------------------------------------------------------------------------
--- AmpFinderForm Functions
----------------------------------------------------------------------------------------------------
-
-function AMPFinder:TEMP_SelectWarrior( wndHandler, wndControl, eMouseButton, nLastRelativeMouseX, nLastRelativeMouseY, bDoubleClick, bStopPropagation )
-	self.nClassDisplayed = knClassWarrior
-	self:UpdateClassIcon()
-	self:UpdatePane(knZoneWarrior)
-	self.wndMain:FindChild("ClassFrame"):FindChild("ClassButton"):SetCheck(false)
-	self.wndMain:FindChild("ClassListFrame"):Show(false)
-end
-
-function AMPFinder:TEMP_SelectStalker( wndHandler, wndControl, eMouseButton, nLastRelativeMouseX, nLastRelativeMouseY, bDoubleClick, bStopPropagation )
-	self.nClassDisplayed = knClassStalker
-	self:UpdateClassIcon()
-	self:UpdatePane(knZoneStalker)
-	self.wndMain:FindChild("ClassFrame"):FindChild("ClassButton"):SetCheck(false)
-	self.wndMain:FindChild("ClassListFrame"):Show(false)
+	
 end
 
 ------------------------------------------------------------------

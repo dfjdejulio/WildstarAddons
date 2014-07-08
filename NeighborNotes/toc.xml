@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <Addon Author="HunterAP" APIVersion="8" Name="NeighborNotes" Version="1" Description="">
-    <Script Name="NeighborNotes.lua"/>
-    <Form Name="NeighborNotes.xml"/>
+	<Script Name="NeighborNotes.lua"/>	
+	<Script Name="MainForm.lua"/>
+	<Script Name="ConfigForm.lua"/>
+	<Script Name="HelpForm.lua"/>
+	<Script Name="enumerations.lua"/>
+	
+	<!-- Locales -->
+	<Script Name="Locales/deDE.lua"/>
+	<Script Name="Locales/enUS.lua"/>
+	<Script Name="Locales/frFR.lua"/>
+	<Script Name="Locales/koKR.lua"/>
+	
+	<!-- Forms -->
+    <Form Name="MainForm.xml"/>
+	<Form Name="ConfigForm.xml"/>
+	<Form Name="HelpForm.xml"/>
 </Addon>

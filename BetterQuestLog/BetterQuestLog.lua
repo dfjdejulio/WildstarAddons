@@ -22,6 +22,7 @@ local activeQuests = {} --table of only active quests (populated when generated)
 local needsRedraw = false
 local isDebugMode = false
 local isSoloMode = false
+local myPlayerName = nil
 
 local log = {}
 
@@ -193,9 +194,8 @@ function BetterQuestLog:JoinBQLChannel()
 	local leader =	self:GetGroupLeader()
 	
 	if self.isSoloMode then
-		local playerName = GameLib.GetPlayerUnit():GetName()
-		log:debug("Joining channel for " .. playerName)
-		self.bqlChannel = ICCommLib.JoinChannel(playerName.."BQLChannel", "OnBQLMessage", self)
+		log:debug("Joining channel for " .. myPlayerName)
+		self.bqlChannel = ICCommLib.JoinChannel(myPlayerName.."BQLChannel", "OnBQLMessage", self)
 	elseif leader then
 		log:debug("Joing channel for " .. leader.strCharacterName)
 		self.bqlChannel = ICCommLib.JoinChannel(leader.strCharacterName.."BQLChannel", "OnBQLMessage", self)
@@ -222,14 +222,15 @@ function BetterQuestLog:BetterQuestLogLoaded()
 	--local Rover = Apollo.GetAddon("Rover")
     --Rover:AddWatch("groupMembers", self.groupMembers)
 
+	-- our player name is very important to a lot of different pieces, wait for us to be able to determine this b4 proceeding
 	if GameLib.GetPlayerUnit() == nil or GameLib.GetPlayerUnit():GetName() == nil then
 		log:debug("GameLib.GetPlayer wasn't ready... waiting 3 seconds")
 		Apollo.CreateTimer("OnLoadFinishedTimer", 3, false)
 		Apollo.StartTimer("OnLoadFinishedtimer")
 	else
 		log:debug("BetterQuestLog Loaded")
+		myPlayerName = GameLib:GetPlayerUnit():GetName() -- our player unit is very transient, store the name we commonly use so we don't run into problems
 		self:JoinBQLChannel()		
-
 		self:CreateActiveQuestsTable() -- not really happy with this atm
 		self:ObtainGroupMembers()
 		if self.isDebugMode or GroupLib.InGroup() or GroupLib.InRaid() then
@@ -254,7 +255,7 @@ function BetterQuestLog:AddGroupMember(playerName)
 		self.groupMembers = {}
 	end
 	
-	if playerName ~= GameLib.GetPlayerUnit():GetName() or self.isDebugMode then	
+	if playerName ~= myPlayerName or self.isDebugMode then	
 		if self.groupMembers[playerName] == nil then
 			log:debug("AddGroupMember - " .. playerName)
 			-- if they didn't, create them
@@ -276,7 +277,7 @@ function BetterQuestLog:ObtainGroupMembers()
 	end
 	
 	if self.isSoloMode then
-		self:AddGroupMember(GameLib.GetPlayerUnit():GetName())
+		self:AddGroupMember(myPlayerName)
 	else
 		for i=1, nGroupMemberCount do
 			self:AddGroupMember(GroupLib.GetGroupMember(i).strCharacterName)
@@ -377,8 +378,7 @@ function BetterQuestLog:OnBQLMessage(channel, tMsg)
 	end
 	
 	-- check if this message was for me to broadcast
-	local myName = GameLib.GetPlayerUnit():GetName()	
-	if tMsg.strEventName == "RequestBroadcast" and tMsg.strPlayerName == myName then
+	if tMsg.strEventName == "RequestBroadcast" and tMsg.strPlayerName == myPlayerName then
 		-- it was, share with the world my quest log
 		--this part confirmed working appropriately
 		self:BroadcastActiveQuests()
@@ -753,8 +753,6 @@ function BetterQuestLog:AddQuestToLog(wndCategory, queQuest)
 			--wndTop:FindChild("TopLevelBtnText"):SetTextColor(kcrDeselectedColor)
 		end
 
-		
-		
 		wndTop:FindChild("TopLevelBtnIcon"):SetSprite(strBottomLevelIconSprite)
 	
 		-- Set the appropriate sprite icon and tooltip for middle level
@@ -1270,14 +1268,13 @@ end
 
 -- broadcasts to anyone listening for BQL that i have had a quest update
 function BetterQuestLog:BroadcastUpdate(queUpdated)
-
 	-- can't broadcast jack if we don't have a channel to broadcast to
 	if self.bqlChannel == nil then
 		return
 	end
 
 	local msg = {}
-	msg.strPlayerName = GameLib.GetPlayerUnit():GetName() -- that's me
+	msg.strPlayerName = myPlayerName -- me
 	msg.strEventName = "QuestUpdated" -- had a quest update
 	msg.strQuestId = queUpdated:GetId() -- with the quest id of this
 	msg.eQuestState = queUpdated:GetState() -- and here's my new state
@@ -1325,15 +1322,13 @@ function BetterQuestLog:RequestGroupBroadcast()
 	end
 	
 	local nMembers = GroupLib.GetMemberCount()
-	local myName = GameLib.GetPlayerUnit():GetName()
 	
 	if nMembers > 0 then
 		local msg = {}
 		msg.strEventName = "RequestBroadcast"
 		for i=1,nMembers do
 			msg.strPlayerName = GroupLib.GetGroupMember(i).strCharacterName
-			--msg.strPlayerName = myName
-			if msg.strPlayerName ~= myName then -- don't request a broadcast from myself
+			if msg.strPlayerName ~= myPlayerName then -- don't request a broadcast from myself
 				local result = self.bqlChannel:SendMessage(msg)
 				-- workaround for not being able to tell when i'm ready to send a message
 				if result == false then
