@@ -1,9 +1,10 @@
 ------------------------------------------------------------------------------------------------
 -- Client Lua Script for AMPFinder
 -- 2014-04-19, Tomii
--- version 1.6.1, 2014-07-02
+-- version 1.6.2, 2014-07-02
 
--- TODO: Save/restore window position. Kinda works but doesn't handle compact windows well.
+-- WATCHING: Save/restore window position. Compact window position restored but it is very clunky
+-- WATCHING: PVP may not be setting factions we understand. Error message made a bit more obvious to aid troubleshooting.
 -- TODO: Get NPC data rather than hardcoding their names
 -- TODO: Localize text when possible
 -- TODO: Put prices (via item reference tCost?) on the pane as a swappable option
@@ -26,6 +27,7 @@
 -----------------------------------------------------------------------------------------------
  
 require "AbilityBook"
+require "ChatSystemLib"
 require "Episode"
 require "Item"
 require "Money"
@@ -182,7 +184,8 @@ local kiLocation = 4
 local kiItemId = 5
 
 local ktUserPrefs = {
-	"strFilter",
+	-- "strFilter", -- strFilter is just a confusing thing to save between sessions. dropping it.
+	"bShowFilter",
 	"bWindowOpen",
 	"bCompact",
 }
@@ -527,7 +530,9 @@ function AMPFinder:OnDocumentReady()
 	self.timerTooltip = nil
 	if (self.bWindowOpen == nil) then self.bWindowOpen = false end
 	if (self.strFilter == nil) then self.strFilter = "" end
+	if (self.bShowFilter == nil) then self.bShowFilter = true end
 	self.nUserSelectedPane = 0
+	self.nFaction = nil
 	self.nDisplayedPane = 0
 	self.TimerSpeed = knSlowDelay
 	self.idleTicks = 0
@@ -536,6 +541,7 @@ function AMPFinder:OnDocumentReady()
 	self.wndHover = nil
 	self.wndLeave = nil
 	if (self.bCompact == nil) then self.bCompact = false end
+	self.bConfirmedCompact = false
 	self.nCompleteDisplayMode = 1
 	self.bInitialShow = true
 	self.bAmpLocations = false
@@ -573,6 +579,7 @@ function AMPFinder:OnDocumentReady()
 		self.timerInit:Start()	
 	
 		self:HookAMPWindow()
+		self:HookAMPTooltips()
 		self:HookTooltips()
 	end
 end
@@ -639,8 +646,23 @@ function AMPFinder:SetAmpLocations()
 				{ "Illium",		"Fate's Landing",		-2960.37, -1153.7,	"Commodities Broker Kezira",	nil},
 				{ "Illium",		"Legion's Way",			-2926.10, -632.32,	"Commodities Broker Larteia",	nil},
 			},
-
 		} 
+	else 
+		---- UNKNOWN VENDORS ----
+		self.LocationToVendor = {
+			[knLocFCON] = 		{	{ "Thayd or Illium",		"?", 0,0, "?", nil}, },
+			[knLocFoolsHope] =	{	{ "Wilderrun",				"?", 0,0, "?", nil}, },
+			[knLocGallow] =		{	{ "Algoroc or Deradune",	"?", 0,0, "?", nil}, },
+			[knLocGlenview] =	{	{ "Algoroc or Deradune",	"?", 0,0, "?", nil}, },
+			[knLocSkywatch] =	{	{ "Galeras or Auroria",		"?", 0,0, "?", nil}, },
+			[knLocSylvan] =		{	{ "Celestion or Ellevar",	"?", 0,0, "?", nil}, },
+			[knLocThermock] =	{	{ "Whitevale",				"?", 0,0, "?", nil}, },
+			[knLocTremor] =		{	{ "Celestion or Ellevar",	"?", 0,0, "?", nil}, },
+			[knLocWalkers] =	{	{ "Farside",				"?", 0,0, "?", nil}, },
+			[knLocBravo] =		{	{ "Farside",				"?", 0,0, "?", nil}, },
+			[knLocCommodity] =	{	{ "Thayd or Illium",		"?", 0,0, "?", nil}, },
+		} 
+		return false -- keep checking!	
 	end
 
 	self.timerInit:Stop()
@@ -652,7 +674,7 @@ end
 function AMPFinder:CompleteHookup()
 	-- Run by SetAmpLocations as the final stage of setup
 
-	self:HookAMPTooltips()
+	-- self:HookAMPTooltips() -- 1.6.2: now done in ondocumentready
 	self:HookVendorLists()
 	
 	self.wndMain:FindChild("PickerBtn"):Enable(true)
@@ -677,6 +699,18 @@ function AMPFinder:CompleteHookup()
 	
 	-- todo: debug
 	-- if (self.bWindowOpen == true) then self.wndMain:Show(true) end
+	
+	if (self.wndMain ~= nil) then
+		--[[
+		if (self.bCompact) then 
+		 	self:CompactWindow() 
+			self.bInitialShow = true  -- force it to redo the windowshow stuff
+			self:OnWindowShow()
+			self:UpdateInterfaceWindowTrack()
+		end
+		--]]
+		self.wndMain:Show(self.bWindowOpen)
+	end	
 end
 
 --------------------------------------------------
@@ -912,7 +946,6 @@ function AMPFinder:HookAMPWindow()
 	tAbilityAMPs.RedrawSelections = function(tEldanAugmentationData)
 		origRedrawSelections(tEldanAugmentationData)
 		
-		-- self = AbilityAMPs table
 		self.wndAMPFilter = Apollo.LoadForm(self.xmlDoc, "AmpFilterForm", tAbilityAMPs.tWndRefs.wndMain, self)		
 
 		local fBox = self.wndAMPFilter:FindChild("FilterBox")
@@ -930,7 +963,7 @@ function AMPFinder:HookAMPWindow()
 				fBox:ClearFocus()
 				self:UpdateAMPWindow(self.strFilter)
 			end
-		end 
+		end
 	end -- end of loop	
 end
 
@@ -950,21 +983,30 @@ local function repositionAugmentationTooltip(wndTooltip)
 end
 
 local function formatLocation(tLocationData, bCX)
-	local strVendorName = tLocationData[5]
-	if (bCX) then strVendorName = "the " .. Apollo.GetString("MarketplaceCommodity_CommoditiesExchange") end	
-	
-	return strVendorName
-		.." in "..tLocationData[2]
-		..", "..tLocationData[1]							
-		.." ("..round(tLocationData[3])
-		..", "..round(tLocationData[4])
-		..")"
+	if (tLocationData[2] == "?") then 
+		-- degraded data given in case faction not obtainable yet
+		return tLocationData[1]
+		
+	else 
+		local strVendorName = tLocationData[5]
+		if (bCX) then strVendorName = "the " .. Apollo.GetString("MarketplaceCommodity_CommoditiesExchange") end	
+		
+		return strVendorName
+			.." in "..tLocationData[2]
+			..", "..tLocationData[1]							
+			.." ("..round(tLocationData[3])
+			..", "..round(tLocationData[4])
+			..")"
+	end
 end
 
 local function extendAugmentationTooltip(wndTooltip, wndControl, tAmp)
 	-- if amp locations have not been set then we can't give meaningful feedback
 	local tAmpFinder = Apollo.GetAddon("AMPFinder")
-	if (tAmpFinder.bAmpLocations == false) then return end
+	
+	-- exit if the nFaction hasn't been set -- if it's not Exiles or Dominion then that's another story
+	if (tAmpFinder.nClass == nil) then return end
+	if (tAmpFinder.nFaction == nil) then return end	
 	if (tAmpFinder.LocationToVendor[knLocCommodity] == nil) then
 		if (tAmpFinder.bDebugMessaged == false) then
 			Print("AMP Finder could not get location table - not sure why this happens. Sorry for the inconvenience :( ")
@@ -972,7 +1014,7 @@ local function extendAugmentationTooltip(wndTooltip, wndControl, tAmp)
 		end
 		return
 	end
-	
+		
 	local wndParent = wndControl:GetParent()
 	local tAugment
 	if (tAmp ~= nil) then
@@ -1121,8 +1163,8 @@ function AMPFinder:HookTooltips()
 		local origItemTooltip = Tooltip.GetItemTooltipForm
 		Tooltip.GetItemTooltipForm = function(luaCaller, wndControl, item, bStuff, nCount)
 			if (item ~= nil) then
-			
-				local nItemType = item:GetItemType()
+				-- in some cases it's possible that 'item' is numeric. trap that case.
+				local nItemType = ( (type(item)=="userdata") and (item:GetItemType()) ) or 0
 				if (nItemType >= knAmpWarrior) and (nItemType <= knAmpSpellslinger) then
 				
 					wndControl:SetTooltipDoc(nil)
@@ -1171,32 +1213,74 @@ function AMPFinder:OnRestore(eType, tSavedData)
 	end
 	
 	-- todo: debug
-	-- if (self.wndMain ~= nil) then
-
-		-- self.wndMain:Show(self.bWindowOpen)
-		-- if (self.bCompact) then 
-		-- 	self:CompactWindow() 
-			-- self.bInitialShow = false
-			-- self:OnWindowShow()
-		-- end
-	-- end
-	
-	if (self.wndAMPFilter == nil) then return end  -- The restore could happen before the filter is hooked
-	local fBox = self.wndAMPFilter:FindChild("FilterBox")
-	if (fBox ~= nil) then
-		fBox:SetText(self.strFilter)
+	if (self.wndMain ~= nil) then
+		if (self.bCompact) then 
+		 	self:CompactWindow() 
+			self.bInitialShow = true  -- force it to redo the windowshow stuff
+			self:OnWindowShow()
+		end
+		self.wndMain:Show(self.bWindowOpen)
 	end
+	
+	if (self.wndAMPFilter ~= nil) then
+		local fBox = self.wndAMPFilter:FindChild("FilterBox")
+		if (fBox ~= nil) then
+			fBox:SetText(self.strFilter)
+		end
+	end
+	
+	self:ShowOrHideFilter()
+	
+	-- Apollo.RegisterEventHandler("WindowManagementReady", "OnWindowManagementReady", self)
 end
 
 function AMPFinder:OnWindowManagementReady()
     Event_FireGenericEvent("WindowManagementAdd", {wnd = self.wndMain, strName = "AMP Finder"})
 end
 
-function AMPFinder:OnSlashCommand()
-	self.wndMain:Show(true)
-	self.wndMain:ToFront()
-	self:UpdatePane()
-	if (self.bPosTracking) then self:HookPosTrack(true) end
+function AMPFinder:OnSlashCommand(strCmd,strArg)
+	strArg = string.lower(strArg)
+	if (strArg == "") then
+		if (self.wndMain ~= nil) then
+			self.wndMain:Show(true)
+			self.wndMain:ToFront()
+			self:UpdatePane()
+			if (self.bPosTracking) then self:HookPosTrack(true) end
+		end		
+	elseif (strArg == "reset") then
+		if (self.wndMain ~= nil) then
+			self.wndMain:SetAnchorOffsets(20, -175, 406, 246)
+			self:UnCompactWindow()
+			self.bCompact = false
+			self.wndMain:FindChild("CompactBtn"):SetCheck(true)
+			ChatSystemLib.PostOnChannel(2,"AMP Finder location has been reset to default.")
+		end
+	elseif (strArg == "filter") then
+		if (self.bShowFilter) then
+			self.bShowFilter = false
+			ChatSystemLib.PostOnChannel(2,"Filter and button will not appear on the AMP Pane of the Action Set Builder.")
+		else
+			self.bShowFilter = true
+			ChatSystemLib.PostOnChannel(2,"Filter and button will appear on the AMP Pane of the Action Set Builder.")
+		end
+		self.strFilter = ""
+		if (self.wndAMPFilter ~= nil) then
+			local fBox = self.wndAMPFilter:FindChild("FilterBox")
+			if (fBox ~= nil) then
+				self.wndAMPFilter:FindChild("FilterClearBtn"):Show(false)
+				self.wndAMPFilter:FindChild("SearchIcon"):Show(true)
+				fBox:SetText("Filter...")
+				fBox:ClearFocus()
+			end
+		end
+		self:ShowOrHideFilter()
+		self:UpdateAMPWindow(nil)
+	else
+		ChatSystemLib.PostOnChannel(2,"Unknown argument. Syntax:");
+		ChatSystemLib.PostOnChannel(2,"  /ampfinder  -- Shows the AMP Finder window");
+		ChatSystemLib.PostOnChannel(2,"  /ampfinder reset -- Resets the AMP Finder window to its default location");
+		ChatSystemLib.PostOnChannel(2,"  /ampfinder filter -- Shows or hides the Filter window from the AMP pane of the Ability Set Builder");
+	end
 end
 
 function AMPFinder:OnCloseWindow( wndHandler, wndControl, eMouseButton )
@@ -1207,11 +1291,18 @@ function AMPFinder:OnChangeZone(oVar, strNewZone)
 	self:UpdatePane()
 end
 
+function AMPFinder:ShowOrHideFilter()
+	if (self.wndAMPFilter ~= nil) then
+		self.wndAMPFilter:Show(self.bShowFilter)
+	end
+end
+
 function AMPFinder:OnFilterClearBtn( wndHandler, wndControl, eMouseButton )
+	if (self.wndAMPFilter == nil) then return end
 	local fBox = self.wndAMPFilter:FindChild("FilterBox")
+	if (fBox == nil) then return end 
 	self.wndAMPFilter:FindChild("FilterClearBtn"):Show(false)
 	self.wndAMPFilter:FindChild("SearchIcon"):Show(true)
-	if (fBox == nil) then return end 
 	self.strFilter = ""
 	fBox:SetText("Filter...")
 	fBox:ClearFocus()
@@ -1219,6 +1310,7 @@ function AMPFinder:OnFilterClearBtn( wndHandler, wndControl, eMouseButton )
 end
 
 function AMPFinder:OnFilterChange( wndHandler, wndControl, strText )
+	if (self.wndAMPFilter == nil) then return end
 	self.strFilter = strText
 	if (strText == "") then
 		self.wndAMPFilter:FindChild("FilterClearBtn"):Show(false)
@@ -1233,6 +1325,7 @@ end
 
 -- called when the AMP window filter needs to be updated
 function AMPFinder:UpdateAMPWindow(filter)
+	self:ShowOrHideFilter()
 	if (filter ~= nil) then 
 		filter = string.lower(filter)
 	end
@@ -1564,8 +1657,8 @@ function AMPFinder:UpdatePane(nZoneId)
 	-- make sure this is set sometime
 	-- if it's not been set, abort procedure
 	if (self.bAmpLocations == false) then
-		self.wndMain:FindChild("AMP_Info"):SetText("AMP Finder is gathering data.\n"..
-			"Should only be a few seconds,\nplease wait...")
+		self.wndMain:FindChild("AMP_Info"):SetText("AMP Finder does not know\nwhich faction your character is in.\n"
+			.."Still working on this problem...\nare you in a PVP battleground?")
 		self.wndMain:FindChild("AMP_Info"):DestroyChildren()
 
 		return
@@ -2424,36 +2517,39 @@ end
 
 function AMPFinder:OnCompactShrink( wndHandler, wndControl, eMouseButton )
 	if (self.bCompact) then return end
+	self.bConfirmedCompact = true
 	self.bCompact = true
 	self:CompactWindow()
 	local nLeft, nTop, nRight, nBottom = self.wndMain:GetAnchorOffsets()
 	self.wndMain:SetAnchorOffsets(nLeft+83, nTop+24, nLeft+83+245, nTop+24+100)
 
-	-- thanks to sinaloit :)	
-	local OptInterface = GetOptionsAddon() -- Apollo.GetAddon("OptionsInterface")
-	if (OptInterface ~= nil) then
-	    OptInterface:UpdateTrackedWindow(self.wndMain)
-	end
+	self:UpdateInterfaceWindowTrack()
 end
 
 function AMPFinder:OnCompactRestore( wndHandler, wndControl, eMouseButton )
 	if (self.bCompact == false) then return end
+	self.bConfirmedCompact = true
 	self.bCompact = false
 	self:UnCompactWindow()
 	local nLeft, nTop, nRight, nBottom = self.wndMain:GetAnchorOffsets()
 	self.wndMain:SetAnchorOffsets(nLeft-83, nTop-24, nLeft-83+386, nTop-24+421)
 	
+	self:UpdateInterfaceWindowTrack()
+end
+
+-- tells the OptionsInterface addon to update its stored position
+function AMPFinder:UpdateInterfaceWindowTrack()
 	-- thanks to sinaloit :)
-	local OptInterface = GetOptionsAddon() -- Apollo.GetAddon("OptionsInterface")
+	local OptInterface = GetOptionsAddon()
 	if (OptInterface ~= nil) then
 	    OptInterface:UpdateTrackedWindow(self.wndMain)
 	end
 end
 
+-- If window is offscreen, then reposition it.
 function AMPFinder:OnWindowShow( wndHandler, wndControl )
 	if (self.bInitialShow == false) then return end
 	self.bInitialShow = false
-
 	local nLeft, nTop, nRight, nBottom = self.wndMain:GetAnchorOffsets()
 	if (nBottom-nTop < 421) then
 		self.bCompact = true
@@ -2464,7 +2560,27 @@ function AMPFinder:OnWindowShow( wndHandler, wndControl )
 		self.wndMain:FindChild("CompactBtn"):SetCheck(true)
 		self:UnCompactWindow()
 	end
+end
+
+-- A bit hacky - if the window is resized smaller than 421 tall, then it's compact.
+-- Only runs when the user resizes so it shouldn't be a huge performance hit.
+-- Once WindowManagement restores a window to compacted state, we can stop checking.
+function AMPFinder:OnWindowResize( wndHandler, wndControl )
+	if (self.bConfirmedCompact) then return end
 	
+	if (self.wndMain == nil) then return end
+	local nLeft, nTop, nRight, nBottom = self.wndMain:GetAnchorOffsets()
+	if (nBottom-nTop < 421) then
+		if (self.bCompact == false) then
+			self.bConfirmedCompact = true
+			self.bCompact = true
+			self.wndMain:FindChild("CompactBtn"):SetCheck(false)
+			self:CompactWindow()
+		end
+		-- Print("Compact")
+	else
+		-- Print("Full-sized")
+	end	
 end
 
 ------------------------------------------------------------------
