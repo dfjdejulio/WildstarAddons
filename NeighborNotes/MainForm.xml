@@ -140,4 +140,7 @@
         </Control>
         <Control Class="Window" LAnchorPoint="1" LAnchorOffset="-30" TAnchorPoint="1" TAnchorOffset="-30" RAnchorPoint="1" RAnchorOffset="0" BAnchorPoint="1" BAnchorOffset="0" RelativeToClient="1" Font="Default" Text="" BGColor="UI_WindowBGDefault" TextColor="UI_WindowTextDefault" Template="Default" TooltipType="OnCursor" Name="Window" TooltipColor="" Sprite="CRB_Basekit:kitBtn_Expand_BottomRightAnchorFlyby" Picture="1" IgnoreMouse="1"/>
     </Form>
+    <Form Class="Window" LAnchorPoint="0" LAnchorOffset="0" TAnchorPoint="0" TAnchorOffset="0" RAnchorPoint="1" RAnchorOffset="0" BAnchorPoint="1" BAnchorOffset="0" RelativeToClient="1" Font="Default" Text="" BGColor="UI_WindowBGDefault" TextColor="UI_WindowTextDefault" Template="HoloWindowSound" TooltipType="OnCursor" Name="FriendContextMenu" Border="1" Picture="1" SwallowMouseClicks="1" Moveable="1" Escapable="1" Overlapped="1" TooltipColor="" Tooltip="" Sprite="BK3:UI_BK3_Holo_Framing_3">
+        <Control Class="Window" LAnchorPoint="0" LAnchorOffset="0" TAnchorPoint="0" TAnchorOffset="0" RAnchorPoint="1" RAnchorOffset="0" BAnchorPoint="1" BAnchorOffset="0" RelativeToClient="1" Font="Default" Text="" BGColor="UI_WindowBGDefault" TextColor="UI_WindowTextDefault" Template="Holo_InputBox" TooltipType="OnCursor" Name="ContextMenuWindow" TooltipColor="" Picture="1" IgnoreMouse="1"/>
+    </Form>
 </Forms>

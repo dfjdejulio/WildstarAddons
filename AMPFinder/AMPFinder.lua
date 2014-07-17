@@ -1,12 +1,11 @@
 ------------------------------------------------------------------------------------------------
 -- Client Lua Script for AMPFinder
 -- 2014-04-19, Tomii
--- version 1.6.2, 2014-07-02
+-- version 1.6.3, 2014-07-15
 
 -- WATCHING: Save/restore window position. Compact window position restored but it is very clunky
 -- WATCHING: PVP may not be setting factions we understand. Error message made a bit more obvious to aid troubleshooting.
--- TODO: Get NPC data rather than hardcoding their names
--- TODO: Localize text when possible
+-- IN PROGRESS: Localize text when possible
 -- TODO: Put prices (via item reference tCost?) on the pane as a swappable option
 -- TODO: UpdateArrowVendor and Questgiver -- Show the arrow, but also show a message
 -- TODO: UpdateArrowVendor - If player doesn't have rep (or prestige) then say so instead of travel
@@ -38,6 +37,8 @@ require "Window"
 -- AMPFinder Module Definition
 -----------------------------------------------------------------------------------------------
 local AMPFinder = {}
+
+local L = Apollo.GetPackage("Gemini:Locale-1.0").tPackage:GetLocale("AMPFinder", true)
 
 -----------------------------------------------------------------------------------------------
 -- Constants
@@ -124,12 +125,6 @@ local knPaneWhitevale = 2
 local knPaneWilderrun = 26
 local knPaneComplete 	= -9999
 local knPaneCommodity 	= -9998
-local knPaneEngineer	= -9991
-local knPaneEsper 		= -9992
-local knPaneMedic 		= -9993
-local knPaneStalker		= -9994
-local knPaneSpellslinger= -9995
-local knPaneWarrior		= -9996
 local ksQuestPanes = knPaneAlgorocQ.."|"..knPaneCelestionQ..
 						"|"..knPaneDeraduneQ.."|"..knPaneEllevarQ
 local ksVendorPanes = "|"..    --	"|2|5|6|7|14|15|16|17|26|28|78|87|88|"
@@ -148,33 +143,27 @@ local ksVendorPanes = "|"..    --	"|2|5|6|7|14|15|16|17|26|28|78|87|88|"
 	knPaneFarsideD.."|"
 
 local ktPaneData = {
-	[0]					= { "(Current zone)",				nil,			},
-	[knPaneAlgoroc] 	= { "Algoroc", 						knLocGallow,	},
-	[knPaneAlgorocQ] 	= { "Algoroc (Quest)",				knLocTremor, 	},
-	[knPaneAuroria]		= { "Auroria",						knLocSkywatch,	},	 
-	[knPaneCelestion]	= { "Celestion",					knLocSylvan,	},
-	[knPaneCelestionQ]	= { "Celestion (Quest)",			knLocGlenview,	},
-	[knPaneDeradune]	= { "Deradune", 					knLocGallow,	},
-	[knPaneDeraduneQ]	= { "Deradune (Quest)", 			knLocGlenview,	},
-	[knPaneEllevar]		= { "Ellevar", 						knLocSylvan,	},
-	[knPaneEllevarQ]	= { "Ellevar (Quest)",				knLocTremor,	},
-	[knPaneFarside]		= { "Farside",						knLocBravo,		},
-	[knPaneFarsideD]	= { "Farside: Virtue's Landing",	knLocWalkers,	},
-	[knPaneFarsideE]	= { "Farside: Walker's Landing",	knLocWalkers,	},
-	[knPaneGaleras]		= { "Galeras",						knLocSkywatch,	},
-	[knPaneIllium]		= { "Illium",						knLocFCON,		},
-	[knPaneIlliumC]		= { "Illium (Commodity Exch)",		knLocCommodity,	},
-	[knPaneThayd]		= { "Thayd",						knLocFCON,		},
-	[knPaneThaydC]		= { "Thayd (Commodity Exch)",		knLocCommodity,	},
-	[knPaneWhitevale]	= { "Whitevale",					knLocThermock,	},
-	[knPaneWilderrun]	= { "Wilderrun",					knLocFoolsHope,	},
-	[knPaneComplete]	= { "Rank 2-3 AMPs",				nil,			},
-	[knPaneEngineer]	= { "Engineer AMPs",				nil,			},
-	[knPaneEsper]		= { "Esper AMPs",					nil,			},
-	[knPaneMedic]		= { "Medic AMPs",					nil,			},
-	[knPaneStalker]		= { "Stalker AMPs",					nil,			},
-	[knPaneSpellslinger]= { "Spellslinger AMPs",			nil,			},
-	[knPaneWarrior]		= { "Warrior AMPs",					nil,			},
+	[0]					= { "PaneCurrentZone",	nil,			},
+	[knPaneAlgoroc] 	= { "PaneAlgoroc", 		knLocGallow,	},
+	[knPaneAlgorocQ] 	= { "PaneAlgorocQ",		knLocTremor, 	},
+	[knPaneAuroria]		= { "PaneAuroria",		knLocSkywatch,	},	 
+	[knPaneCelestion]	= { "PaneCelestion",	knLocSylvan,	},
+	[knPaneCelestionQ]	= { "PaneCelestionQ",	knLocGlenview,	},
+	[knPaneDeradune]	= { "PaneDeradune", 	knLocGallow,	},
+	[knPaneDeraduneQ]	= { "PaneDeraduneQ", 	knLocGlenview,	},
+	[knPaneEllevar]		= { "PaneEllevar", 		knLocSylvan,	},
+	[knPaneEllevarQ]	= { "PaneEllevarQ",		knLocTremor,	},
+	[knPaneFarside]		= { "PaneFarside",		knLocBravo,		},
+	[knPaneFarsideD]	= { "PaneFarsideD",		knLocWalkers,	},
+	[knPaneFarsideE]	= { "PaneFarsideE",		knLocWalkers,	},
+	[knPaneGaleras]		= { "PaneGaleras",		knLocSkywatch,	},
+	[knPaneIllium]		= { "PaneIllium",		knLocFCON,		},
+	[knPaneIlliumC]		= { "PaneIlliumC",		knLocCommodity,	},
+	[knPaneThayd]		= { "PaneThayd",		knLocFCON,		},
+	[knPaneThaydC]		= { "PaneThaydC",		knLocCommodity,	},
+	[knPaneWhitevale]	= { "PaneWhitevale",	knLocThermock,	},
+	[knPaneWilderrun]	= { "PaneWilderrun",	knLocFoolsHope,	},
+	[knPaneComplete]	= { "PaneComplete",		nil,			},
 }
 
 local kiImbueSpellId = 1
@@ -465,28 +454,24 @@ local kiEpisodeQuest1 = 4
 local kiEpisodeQuest2 = 5
 local kiEpisodeQuest3 = 6
 local ktEpisodeInfo = {  -- 541, 309 = knPaneCelestionQ, knPaneDeraduneQ
-	[knPaneDeraduneQ]	= {309, "Apprentice Laveka", "Moodies!", 3302, 3304, 5799},
-	[knPaneAlgorocQ]	= {392, "Pappy Grizzleston", "Loftite Rush", 4609, 4541, 0},
-	[knPaneEllevarQ]	= {538, "Guardian Zelcon", "The Unforgiving Storm", 6575, 6576, 6577},
-	[knPaneCelestionQ]	= {541, "Arwick Redleaf", "Greenbough's Guardian", 6670, 6671, 6672},
+	[knPaneDeraduneQ]	= {309, "DeraduneQuestgiver", "DeraduneEpisode", 3302, 3304, 5799},
+	[knPaneAlgorocQ]	= {392, "AlgorocQuestgiver", "AlgorocEpisode", 4609, 4541, 0},
+	[knPaneEllevarQ]	= {538, "EllevarQuestgiver", "EllevarEpisode", 6575, 6576, 6577},
+	[knPaneCelestionQ]	= {541, "CelestionQuestgiver", "CelestionEpisode", 6670, 6671, 6672},
 }
 
 local karEpisodeTitles = {
-	-- ep 309, deradune
-	[3302] = "Mojo Moodies",
-	[3304] = "Tamolo's Necromojo",
-	[5799] = "The Staff and the Shaman",
-	-- ep 392, algoroc
-	[4609] = "The Loftite Hunt Begins",
-	[4541] = "Troublesome Tremors",
-	-- ep 538, ellevar
-	[6575] = "A Healing Hand",
-	[6576] = "The Storm's Power",
-	[6577] = "Unfortunate Force",
-	-- ep 541, celestion
-	[6670] = "Reclaiming Greenbough",
-	[6671] = "A Fiery Escape",
-	[6672] = "Greenbough Guardian",
+	[3302] = "DeraduneQuest1",
+	[3304] = "DeraduneQuest2",
+	[5799] = "DeraduneQuest3",
+	[4609] = "AlgorocQuest1",
+	[4541] = "AlgorocQuest2",
+	[6575] = "EllevarQuest1",
+	[6576] = "EllevarQuest2",
+	[6577] = "EllevarQuest3",
+	[6670] = "CelestionQuest1",
+	[6671] = "CelestionQuest2",
+	[6672] = "CelestionQuest3",
 }
 
 local knCondQuest = 1
@@ -552,7 +537,7 @@ function AMPFinder:OnDocumentReady()
 	if self.xmlDoc ~= nil and self.xmlDoc:IsLoaded() then
 	    self.wndMain = Apollo.LoadForm(self.xmlDoc, "AmpFinderForm", nil, self)
 		if self.wndMain == nil then
-			Apollo.AddAddonErrorText(self, "Could not load the main window for some reason.")
+			Apollo.AddAddonErrorText(self, L["CantLoadForm"])
 			return
 		end
 		
@@ -589,6 +574,7 @@ function AMPFinder:SetAmpLocations()
 	if (self.bAmpLocations) then return false end
 	
 	--[[
+	-- this is for debug purposes
 	self.nIntentionalDelay = self.nIntentionalDelay - 1
 	if (self.nIntentionalDelay > 0) then 
 		Print("Intentional testing delay. "..self.nIntentionalDelay.." ticks remaining.")
@@ -612,55 +598,55 @@ function AMPFinder:SetAmpLocations()
 	if (faction == Unit.CodeEnumFaction.ExilesPlayer) then
 		---- EXILE VENDORS ---
 		self.LocationToVendor = {
-			[knLocFCON] =		{	{ "Thayd",		"FCON Headquarters",	4211.52, -2254.72,	"Supply Officer Clayre",		nil},				},
-			[knLocFoolsHope] =	{	{ "Wilderrun",	"Fool's Hope",			2074.86, -1729.20,	"Merchant Snowglimmer",			"Wilderrun Expedition"},	},
-			[knLocGallow] = 	{	{ "Algoroc",	"Gallow",				4085.17, -3938.71,	"Merchant Clara Clearfield",	"The Algoroc Accord"},	},
-			[knLocGlenview] = 	{	{ "Celestion",	"Glenview's Bulwark",	1028.70, -3052.39,	"(Questline) Reclaiming Greenbough", nil},			},
-			[knLocSkywatch] = 	{	{ "Galeras",	"Skywatch",				5758.36, -2579.27,	"Provisions Officer Windfree",	"OPERATION: Galeras"},	},
-			[knLocSylvan] =		{	{ "Celestion",	"Sylvan Glade",			2706.62, -2405.68,	"Melri Gladewalker",			"Protectors of Celestion"},	},
-			[knLocThermock] =	{	{ "Whitevale",	"Thermock Hold",		4584.49, -790.67,	"Fenan Sunstrider",				"The Whitevale Frontier"},	},
-			[knLocTremor] = 	{	{ "Algoroc",	"Tremor Ridge",			3767.50, -4645.34,	"(Questline) The Loftite Hunt Begins", nil},			},
-			[knLocWalkers] =	{	{ "Farside",	"Walker's Landing", 	5899.68, -4946.27,	"Reya Resinbough",				"Farside Sector"},		},
-			[knLocBravo] =		{	{ "Farside",	"Touchdown Site Bravo",	4305.31, -5652.43,	"Provisioner Zanogez",			"Farside Sector"},		},
+			[knLocFCON] =		{	{ "Z_Thayd",		"SZ_FCON",		4211.52, -2254.72,	"NPC_Clayre",			nil},				},
+			[knLocFoolsHope] =	{	{ "Z_Wilderrun",	"SZ_FoolsHope",	2074.86, -1729.20,	"NPC_Snowglimmer",		"E_Rep_Wilderrun"},	},
+			[knLocGallow] = 	{	{ "Z_Algoroc",		"SZ_Gallow",	4085.17, -3938.71,	"NPC_ClaraClearfield",	"E_Rep_Algoroc"},	},
+			[knLocGlenview] = 	{	{ "Z_Celestion",	"SZ_Glenview",	1028.70, -3052.39,	"CelestionQuest1",		nil},				},
+			[knLocSkywatch] = 	{	{ "Z_Galeras",		"SZ_Skywatch",	5758.36, -2579.27,	"NPC_Windfree",			"E_Rep_Galeras"},	},
+			[knLocSylvan] =		{	{ "Z_Celestion",	"SZ_Sylvan",	2706.62, -2405.68,	"NPC_MelriGladewalker",	"E_Rep_Celestion"}, },
+			[knLocThermock] =	{	{ "Z_Whitevale",	"SZ_Thermock",	4584.49, -790.67,	"NPC_FenanSunstrider",	"E_Rep_Whitevale"},	},
+			[knLocTremor] = 	{	{ "Z_Algoroc",		"SZ_Tremor",	3767.50, -4645.34,	"AlgorocQuest1", 		nil},				},
+			[knLocWalkers] =	{	{ "Z_Farside",		"SZ_Walkers", 	5899.68, -4946.27,	"NPC_ReyaResinbough",	"E_Rep_Farside"},	},
+			[knLocBravo] =		{	{ "Z_Farside",		"SZ_Bravo",		4305.31, -5652.43,	"NPC_Zanogez",			"E_Rep_Farside"},	},
 			[knLocCommodity] =	{
-				{ "Thayd",		"Academy Corner",		4294.63, -2405.07,	"Commodities Broker Thualla",	nil},
-				{ "Thayd",		"Arborian Gardens",		3778.36, -2026.74, 	"Commodities Broker Jaryth",	nil},
-				{ "Thayd",		"Fortune's Ground",		4035.35, -1833.44,	"Commodities Broker Dusa",		nil},
+				{ "Z_Thayd",	"SZ_AcademyCorner",		4294.63, -2405.07,	"NPC_Thualla",	nil},
+				{ "Z_Thayd",	"SZ_ArborianGardens",	3778.36, -2026.74, 	"NPC_Jaryth",	nil},
+				{ "Z_Thayd",	"SZ_FortunesGround",	4035.35, -1833.44,	"NPC_Dusa",		nil},
 			},
 		}			
 	elseif (faction == Unit.CodeEnumFaction.DominionPlayer) then
 		---- DOMINION VENDORS ----
 		self.LocationToVendor = {
-			[knLocFCON] = 		{	{ "Illium",		"Legion's Way", 		-2856.84, -495.14,	"Supply Officer Phenoxia",		nil},				},
-			[knLocFoolsHope] =	{	{ "Wilderrun",	"Fort Vigilance",		1270.62, -2012.74,	"Provisioner Jazira",			"The Wilderrun Campaign"},	},
-			[knLocGallow] =		{	{ "Deradune",	"Bloodfire Village",	-5621.64, -710.04,	"Mika",							"The Deradune Watch"},	},
-			[knLocGlenview] =	{	{ "Deradune",	"Spearclaw Post",		-5487.2, -1088.3,	"(Quest) Mojo Moodies",			nil},				},
-			[knLocSkywatch] =	{	{ "Auroria",	"Hycrest",				-2431, -1884.85,	"Merchant Voxic",				"Auroria Province"},		},
-			[knLocSylvan] =		{	{ "Ellevar",	"Lightreach Mission",	-2548, -3501.42,	"Lady Saphis",					"The Ellevar Sanction"},	},
-			[knLocThermock] =	{	{ "Whitevale",	"Palerock Post",		2137.97, -754.56,	"Zephix",						"The Whitevale Offensive"},	},
-			[knLocTremor] =		{	{ "Ellevar",	"Vigilant's Stand",		-3175.2, -3670.9,	"(Quest) A Healing Hand",		nil},				},
-			[knLocWalkers] =	{	{ "Farside",	"Virtue's Landing", 	5353.69, -4555.38,	"Dakahari",						"MISSION: Farside"},		},
-			[knLocBravo] =		{	{ "Farside",	"Sovereign's Landing",	4041.86, -5197.45,	"Merchandiser Noriom",			"MISSION: Farside"},		},
+			[knLocFCON] = 		{	{ "Z_Illium",		"SZ_LegionsWay", 	-2856.84, -495.14,	"NPC_Phenoxia",		nil},				},
+			[knLocFoolsHope] =	{	{ "Z_Wilderrun",	"SZ_FtVigilance",	1270.62, -2012.74,	"NPC_Jazira",			"D_Rep_Wilderrun"},	},
+			[knLocGallow] =		{	{ "Z_Deradune",		"SZ_Bloodfire",		-5621.64, -710.04,	"NPC_Mika",							"D_Rep_Deradune"},	},
+			[knLocGlenview] =	{	{ "Z_Deradune",		"SZ_Spearclaw",		-5487.2, -1088.3,	"DeraduneQuest1",			nil},				},
+			[knLocSkywatch] =	{	{ "Z_Auroria",		"SZ_Hycrest",		-2431, -1884.85,	"NPC_Voxic",				"D_Rep_Auroria"},		},
+			[knLocSylvan] =		{	{ "Z_Ellevar",		"SZ_Lightreach",	-2548, -3501.42,	"NPC_Saphis",					"D_Rep_Ellevar"},	},
+			[knLocThermock] =	{	{ "Z_Whitevale",	"SZ_Palerock",		2137.97, -754.56,	"NPC_Zephix",						"D_Rep_Whitevale"},	},
+			[knLocTremor] =		{	{ "Z_Ellevar",		"SZ_VigilantStand",	-3175.2, -3670.9,	"EllevarQuest1",		nil},				},
+			[knLocWalkers] =	{	{ "Z_Farside",		"SZ_Virtue", 		5353.69, -4555.38,	"NPC_Dakahari",						"D_Rep_Farside"},		},
+			[knLocBravo] =		{	{ "Z_Farside",		"SZ_Sovereign",		4041.86, -5197.45,	"NPC_Noriom",			"D_Rep_Farside"},		},
 			[knLocCommodity] =	{	
-				{ "Illium",		"Spaceport Alpha",		-3689.13, -860.79,	"Commodities Broker Lyvire",	nil},
-				{ "Illium",		"Fate's Landing",		-2960.37, -1153.7,	"Commodities Broker Kezira",	nil},
-				{ "Illium",		"Legion's Way",			-2926.10, -632.32,	"Commodities Broker Larteia",	nil},
+				{ "Z_Illium",	"SZ_SpaceportAlpha",	-3689.13, -860.79,	"NPC_Lyvire",	nil},
+				{ "Z_Illium",	"SZ_FatesLanding",		-2960.37, -1153.7,	"NPC_Kezira",	nil},
+				{ "Z_Illium",	"SZ_LegionsWay",		-2926.10, -632.32,	"NPC_Larteia",	nil},
 			},
 		} 
 	else 
 		---- UNKNOWN VENDORS ----
 		self.LocationToVendor = {
-			[knLocFCON] = 		{	{ "Thayd or Illium",		"?", 0,0, "?", nil}, },
-			[knLocFoolsHope] =	{	{ "Wilderrun",				"?", 0,0, "?", nil}, },
-			[knLocGallow] =		{	{ "Algoroc or Deradune",	"?", 0,0, "?", nil}, },
-			[knLocGlenview] =	{	{ "Algoroc or Deradune",	"?", 0,0, "?", nil}, },
-			[knLocSkywatch] =	{	{ "Galeras or Auroria",		"?", 0,0, "?", nil}, },
-			[knLocSylvan] =		{	{ "Celestion or Ellevar",	"?", 0,0, "?", nil}, },
-			[knLocThermock] =	{	{ "Whitevale",				"?", 0,0, "?", nil}, },
-			[knLocTremor] =		{	{ "Celestion or Ellevar",	"?", 0,0, "?", nil}, },
-			[knLocWalkers] =	{	{ "Farside",				"?", 0,0, "?", nil}, },
-			[knLocBravo] =		{	{ "Farside",				"?", 0,0, "?", nil}, },
-			[knLocCommodity] =	{	{ "Thayd or Illium",		"?", 0,0, "?", nil}, },
+			[knLocFCON] = 		{	{ "SZ_UA_Thayd",		"?", 0,0, "?", nil}, },
+			[knLocFoolsHope] =	{	{ "SZ_UA_FoolsHope",				"?", 0,0, "?", nil}, },
+			[knLocGallow] =		{	{ "SZ_UA_Gallow",	"?", 0,0, "?", nil}, },
+			[knLocGlenview] =	{	{ "SZ_UA_Glenview",	"?", 0,0, "?", nil}, },
+			[knLocSkywatch] =	{	{ "SZ_UA_Skywatch",		"?", 0,0, "?", nil}, },
+			[knLocSylvan] =		{	{ "SZ_UA_Sylvan",	"?", 0,0, "?", nil}, },
+			[knLocThermock] =	{	{ "SZ_UA_Thermock",				"?", 0,0, "?", nil}, },
+			[knLocTremor] =		{	{ "SZ_UA_Tremor",	"?", 0,0, "?", nil}, },
+			[knLocWalkers] =	{	{ "SZ_UA_Farside",				"?", 0,0, "?", nil}, },
+			[knLocBravo] =		{	{ "SZ_UA_Farside",				"?", 0,0, "?", nil}, },
+			[knLocCommodity] =	{	{ "SZ_UA_Thayd",		"?", 0,0, "?", nil}, },
 		} 
 		return false -- keep checking!	
 	end
@@ -897,8 +883,9 @@ function AMPFinder:IsLearnedBySpellId(nSpellId, tAmpRecord)
 	
 	local strTier = ""
 	if (tAmpRecord ~= nil) then
-		strTier = " ("..karCategoryToConstantData[ tAmpRecord[kiAmpCategory] ][ 3 ]
-			.." Rank " .. tAmpRecord[kiAmpRank] .. ")"
+		strTier = String_GetWeaselString(L["RankLong"],
+			karCategoryToConstantData[ tAmpRecord[kiAmpCategory] ][ 3 ],
+			tAmpRecord[kiAmpRank])
 	end
 	
 	
@@ -914,8 +901,9 @@ function AMPFinder:IsLearnedBySpellId(nSpellId, tAmpRecord)
 			end
 			
 			-- make sure we identify the amp record if tAmpRecord is nil)
-			strTier = " ("..karCategoryToConstantData[tAmp.nCategoryId][3].." Rank "
-				.. tAmp.nCategoryTier..")"
+			strTier = String_GetWeaselString(L["RankLong"], 
+				karCategoryToConstantData[tAmp.nCategoryId][3],
+				tAmp.nCategoryTier)
 		end
 	end
 	
@@ -951,7 +939,7 @@ function AMPFinder:HookAMPWindow()
 		local fBox = self.wndAMPFilter:FindChild("FilterBox")
 		if (fBox ~= nil) then
 			if (self.strFilter == "") then
-				fBox:SetText("Filter...")
+				fBox:SetText(L["FilterBlank"])
 				fBox:ClearFocus()
 				self.wndAMPFilter:FindChild("FilterClearBtn"):Show(false)
 				self.wndAMPFilter:FindChild("SearchIcon"):Show(true)
@@ -985,18 +973,16 @@ end
 local function formatLocation(tLocationData, bCX)
 	if (tLocationData[2] == "?") then 
 		-- degraded data given in case faction not obtainable yet
-		return tLocationData[1]
+		-- TODO: localize zone name
+		return L[ tLocationData[1] ]
 		
 	else 
-		local strVendorName = tLocationData[5]
-		if (bCX) then strVendorName = "the " .. Apollo.GetString("MarketplaceCommodity_CommoditiesExchange") end	
-		
-		return strVendorName
-			.." in "..tLocationData[2]
-			..", "..tLocationData[1]							
-			.." ("..round(tLocationData[3])
-			..", "..round(tLocationData[4])
-			..")"
+		local strVendorName = L["CX"]
+		if (bCX ~= true) then
+			strVendorName = L["CX"]
+		end	
+		-- TODO: localize all vendor data
+		return String_GetWeaselString(L["LocationTip"], strVendorName, L[tLocationData[2]], L[ tLocationData[1] ], tLocationData[3], tLocationData[4])
 	end
 end
 
@@ -1009,7 +995,7 @@ local function extendAugmentationTooltip(wndTooltip, wndControl, tAmp)
 	if (tAmpFinder.nFaction == nil) then return end	
 	if (tAmpFinder.LocationToVendor[knLocCommodity] == nil) then
 		if (tAmpFinder.bDebugMessaged == false) then
-			Print("AMP Finder could not get location table - not sure why this happens. Sorry for the inconvenience :( ")
+			Print(L["LocationTableError"])
 			tAmpFinder.bDebugMessaged = true
 		end
 		return
@@ -1036,7 +1022,7 @@ local function extendAugmentationTooltip(wndTooltip, wndControl, tAmp)
 		if (nLocation == knLocQuest) then
 
 			local nCount = 0
-			strLoc = "AMP is locked. Can be obtained from "
+			strLoc = L["ObtainQuest"]
 			
 			if (IsKeyComplete(knPaneCelestionQ) == false) and (IsKeyComplete(knPaneDeraduneQ) == false) then
 				local tLocationData1 = tAmpFinder.LocationToVendor[knLocGlenview][1]
@@ -1045,27 +1031,28 @@ local function extendAugmentationTooltip(wndTooltip, wndControl, tAmp)
 			end
 			
 			if (IsKeyComplete(knPaneAlgorocQ) == false) and (IsKeyComplete(knPaneEllevarQ) == false) then
-				if (nCount >= 1) then strLoc = strLoc..", from " end
+				if (nCount >= 1) then strLoc = strLoc..L["ObtainBridge1"] end
 				
 				local tLocationData2 = tAmpFinder.LocationToVendor[knLocTremor][1]
 				strLoc = strLoc .. formatLocation(tLocationData2, false)
 				nCount = nCount + 1
 			end
 			
-			if (nCount >= 1) then strLoc = strLoc.." or from " end
+			if (nCount >= 1) then strLoc = strLoc..L["ObtainBridge"] end
 			tLocationData = tAmpFinder.LocationToVendor[knLocCommodity][1]
 			strLoc = strLoc .. formatLocation(tLocationData, true)
 			
 		elseif (nLocation == knLocGallowSylvan) then
 			tLocationData1 = tAmpFinder.LocationToVendor[knLocGallow][1]
 			tLocationData2 = tAmpFinder.LocationToVendor[knLocSylvan][1]
-			strLoc = "AMP is locked. Can be obtained from "
+			strLoc = L["ObtainVendor"]
 				.. formatLocation(tLocationData1, false)
+				.. L["ObtainBridge"]
 				.. formatLocation(tLocationData2, false)
 				
 		elseif (nLocation == knLocUnknown) then
 			tLocationData = tAmpFinder.LocationToVendor[knLocCommodity][1]
-			strLoc = "AMP is locked. May be for sale at "
+			strLoc = L["ObtainCX"]
 				.. formatLocation(tLocationData, true)
 		
 		elseif (nLocation ~= nil) then
@@ -1078,16 +1065,16 @@ local function extendAugmentationTooltip(wndTooltip, wndControl, tAmp)
 			local tLocRecord = tAmpFinder.LocationToVendor[nLocation]
 			if (tLocRecord ~= nil) then tLocationData = tLocRecord[1] end
 			if (tLocationData ~= nil) then
-				strLoc = "AMP is locked. Can be obtained from "
+				strLoc = L["ObtainVendor"]
 					.. formatLocation(tLocationData, false)
 			else 
 				tLocationData = tAmpFinder.LocationToVendor[knLocCommodity][1]
-				strLoc = "AMP is locked. May be for sale at "
+				strLoc = L["ObtainCX"]
 					.. formatLocation(tLocationData, true)
 			end		
 		else 
 			tLocationData = tAmpFinder.LocationToVendor[knLocCommodity][1]
-			strLoc = "AMP is locked. May be for sale at "
+			strLoc = L["ObtainCX"]
 					.. formatLocation(tLocationData, true)
 		end
 		
@@ -1235,7 +1222,7 @@ function AMPFinder:OnRestore(eType, tSavedData)
 end
 
 function AMPFinder:OnWindowManagementReady()
-    Event_FireGenericEvent("WindowManagementAdd", {wnd = self.wndMain, strName = "AMP Finder"})
+    Event_FireGenericEvent("WindowManagementAdd", {wnd = self.wndMain, strName = L["AddonName"]})
 end
 
 function AMPFinder:OnSlashCommand(strCmd,strArg)
@@ -1253,15 +1240,15 @@ function AMPFinder:OnSlashCommand(strCmd,strArg)
 			self:UnCompactWindow()
 			self.bCompact = false
 			self.wndMain:FindChild("CompactBtn"):SetCheck(true)
-			ChatSystemLib.PostOnChannel(2,"AMP Finder location has been reset to default.")
+			ChatSystemLib.PostOnChannel(2,L["AmpFinderReset"])
 		end
 	elseif (strArg == "filter") then
 		if (self.bShowFilter) then
 			self.bShowFilter = false
-			ChatSystemLib.PostOnChannel(2,"Filter and button will not appear on the AMP Pane of the Action Set Builder.")
+			ChatSystemLib.PostOnChannel(2,L["FilterDisabled"])
 		else
 			self.bShowFilter = true
-			ChatSystemLib.PostOnChannel(2,"Filter and button will appear on the AMP Pane of the Action Set Builder.")
+			ChatSystemLib.PostOnChannel(2,L["FilterEnabled"])
 		end
 		self.strFilter = ""
 		if (self.wndAMPFilter ~= nil) then
@@ -1269,17 +1256,17 @@ function AMPFinder:OnSlashCommand(strCmd,strArg)
 			if (fBox ~= nil) then
 				self.wndAMPFilter:FindChild("FilterClearBtn"):Show(false)
 				self.wndAMPFilter:FindChild("SearchIcon"):Show(true)
-				fBox:SetText("Filter...")
+				fBox:SetText(L["FilterBlank"])
 				fBox:ClearFocus()
 			end
 		end
 		self:ShowOrHideFilter()
 		self:UpdateAMPWindow(nil)
 	else
-		ChatSystemLib.PostOnChannel(2,"Unknown argument. Syntax:");
-		ChatSystemLib.PostOnChannel(2,"  /ampfinder  -- Shows the AMP Finder window");
-		ChatSystemLib.PostOnChannel(2,"  /ampfinder reset -- Resets the AMP Finder window to its default location");
-		ChatSystemLib.PostOnChannel(2,"  /ampfinder filter -- Shows or hides the Filter window from the AMP pane of the Ability Set Builder");
+		ChatSystemLib.PostOnChannel(2,L["SlashHelp1"]);
+		ChatSystemLib.PostOnChannel(2,L["SlashHelp2"]);
+		ChatSystemLib.PostOnChannel(2,L["SlashHelp3"]);
+		ChatSystemLib.PostOnChannel(2,L["SlashHelp4"]);
 	end
 end
 
@@ -1304,7 +1291,7 @@ function AMPFinder:OnFilterClearBtn( wndHandler, wndControl, eMouseButton )
 	self.wndAMPFilter:FindChild("FilterClearBtn"):Show(false)
 	self.wndAMPFilter:FindChild("SearchIcon"):Show(true)
 	self.strFilter = ""
-	fBox:SetText("Filter...")
+	fBox:SetText(L["FilterBlank"])
 	fBox:ClearFocus()
 	self:UpdateAMPWindow(nil)
 end
@@ -1333,6 +1320,7 @@ function AMPFinder:UpdateAMPWindow(filter)
 	local tAbilityAMPs = GetAbilityAMPsAddon() -- Apollo.GetAddon("AbilityAMPs")
 	if (tAbilityAMPs == nil) then return end -- nothing to do if the addon isn't there
 	local cnt = 0
+	if (tAbilityAMPs.tWndRefs.wndMain == nil) then return end
 	local wndAMPs = tAbilityAMPs.tWndRefs.wndMain:FindChild("ScrollContainer:Amps")
 	for idx, wndAmp in pairs(wndAMPs:GetChildren()) do
 		local tAmp = wndAmp:GetData()
@@ -1460,36 +1448,65 @@ function AMPFinder:OnClickCondAmp( wndHandler, wndControl, eMouseButton, nLastRe
 				local nRecord = AllAmpData[ tAmpData[4] ][ tAmpData[2] ]
 				
 				if (nRecord == nil) then
-					wndRank:SetText("World drop")
+					wndRank:SetText(L["LocWorldDrop"])
 				else
 					local nLoc = nRecord[4]
 					if (nLoc == nil) or (nLoc == knLocUnknown) then
-						wndRank:SetText("World drop")
+						wndRank:SetText(L["LocWorldDrop"])
 					elseif (nLoc == knLocAutolearned) then
-						wndRank:SetText("Auto-learned")
+						wndRank:SetText(L["LocAutoLearned"])
 					elseif (nLoc == knLocQuest) then
-						wndRank:SetText("Quest reward")
+						wndRank:SetText(L["LocQuestReward"])
 					elseif (nLoc == knLocGallowSylvan) then
-						wndRank:SetText(self.LocationToVendor[knLocGallow][1][1].."/"
-						..self.LocationToVendor[knLocSylvan][1][1])
+						-- TODO: localize zone name
+						wndRank:SetText(L[ self.LocationToVendor[knLocGallow][1][1] ] .."/"
+						..L[ self.LocationToVendor[knLocSylvan][1][1] ])
 					elseif (self.LocationToVendor[nLoc] ~= nil) then
-						wndRank:SetText(self.LocationToVendor[nLoc][1][1])
+						-- TODO: localize zone name
+						wndRank:SetText(L[ self.LocationToVendor[nLoc][1][1] ])
 					else
 						wndRank:SetText("")
 					end
 				end
+			--[[
+			elseif (self.nCompleteDisplayMode == 1) then
+				local nRecord = AllAmpData[ tAmpData[4] ][ tAmpData[2] ]
+				
+				if (nRecord == nil) then
+					wndRank:SetText(L["PriceUnknown"])
+				else
+					local nLoc = nRecord[4]
+					if (nLoc == nil) or (nLoc == knLocUnknown) then
+						wndRank:SetText(L["LocWorldDrop"])
+					elseif (nLoc == knLocAutolearned) then
+						wndRank:SetText(L["LocAutoLearned"])
+					elseif (nLoc == knLocQuest) then
+						wndRank:SetText(L["LocQuestReward"])
+					elseif (nLoc == knLocFCON) then
+						wndRank:SetText(L["PricePrestige"]) -- TODO: Price
+					elseif (nLoc == knLocGallowSylvan) then
+						wndRank:SetText(L["PriceGold"]) -- TODO: Price
+					elseif (self.LocationToVendor[nLoc] ~= nil) then
+						wndRank:SetText(L["PriceGold"]) -- TODO: Price
+					else
+						wndRank:SetText("")
+					end
+				end
+			--]]
 			else
 				local nRecord = AllAmpData[ tAmpData[4] ][ tAmpData[2] ]
 
 				local nCatId = nRecord[kiAmpCategory]
 				local nRank = nRecord[kiAmpRank]
-				wndRank:SetText(karCategoryToConstantData[nCatId][3].." R"..nRank)
+				wndRank:SetText(String_GetWeaselString(L["RankShort"], karCategoryToConstantData[nCatId][3], nRank))
 			end
 		end -- tAmpData ~= nil
 	end -- pairs
 
 	if (self.nCompleteDisplayMode == 0) then
 		self.nCompleteDisplayMode = 1
+	-- elseif (self.nCompleteDisplayMode == 1) then
+	--	self.nCompleteDisplayMode = 2
 	else
 		self.nCompleteDisplayMode = 0
 	end
@@ -1549,7 +1566,7 @@ end
 
 function AMPFinder:OnInterfaceMenuListHasLoaded()
 
-	Event_FireGenericEvent("InterfaceMenuList_NewAddOn", "AMP Finder",
+	Event_FireGenericEvent("InterfaceMenuList_NewAddOn", L["AddonName"],
 		{ "AMPFinder_ShowHide", "", "CRB_Basekit:kitIcon_Holo_HazardRadioactive" } ) 
 
 	self:UpdateInterfaceMenuAlerts()
@@ -1571,8 +1588,8 @@ function AMPFinder:UpdateInterfaceMenuAlerts()
 		end
 	end
 	
-	Event_FireGenericEvent("InterfaceMenuList_AlertAddOn", "AMP Finder",
-		{false, nAmpsUnlearned.." AMPs left to learn", nAmpsUnlearned } )
+	Event_FireGenericEvent("InterfaceMenuList_AlertAddOn", L["AddonName"],
+		{false, String_GetWeaselString(L["AmpsRemaining"], nAmpsUnlearned), nAmpsUnlearned } )
 end
 
 function AMPFinder:OnInterfaceMenuShowHide() 
@@ -1607,8 +1624,8 @@ function AMPFinder:UpdateClassIcon()
 		return -- not sure what this is, but it ain't somethin we can handle
 	end
 	self.wndMain:FindChild("ClassFrame"):FindChild("ClassIcon"):SetSprite(strIcon)
-	self.wndMain:FindChild("ClassFrame"):SetTooltip("Currently showing "
-		..karClassNames[self.nClassDisplayed].." AMPs")
+	self.wndMain:FindChild("ClassFrame"):SetTooltip(String_GetWeaselString(L["CurrentlyShowingTip"],
+		karClassNames[self.nClassDisplayed]))
 end
 
 function AMPFinder:BuildClassMenu() 
@@ -1657,8 +1674,7 @@ function AMPFinder:UpdatePane(nZoneId)
 	-- make sure this is set sometime
 	-- if it's not been set, abort procedure
 	if (self.bAmpLocations == false) then
-		self.wndMain:FindChild("AMP_Info"):SetText("AMP Finder does not know\nwhich faction your character is in.\n"
-			.."Still working on this problem...\nare you in a PVP battleground?")
+		self.wndMain:FindChild("AMP_Info"):SetText(L["CannotUpdate"])
 		self.wndMain:FindChild("AMP_Info"):DestroyChildren()
 
 		return
@@ -1680,15 +1696,15 @@ function AMPFinder:UpdatePane(nZoneId)
 		if (ktPaneData[self.nDisplayedPane] == nil) then
 			strZoneName = tZoneInfo.strName
 		else
-			strZoneName = ktPaneData[self.nDisplayedPane][1]
+			strZoneName = L[ ktPaneData[self.nDisplayedPane][1] ]
 		end
 	elseif (self.nUserSelectedPane == tZoneInfo.id) then
 		self.nUserSelectedPane = 0
 		self.nDisplayedPane = tZoneInfo.id
-		strZoneName = ktPaneData[self.nDisplayedPane][1]
+		strZoneName = L[ ktPaneData[self.nDisplayedPane][1] ]
 	else
 		self.nDisplayedPane = self.nUserSelectedPane
-		strZoneName = ktPaneData[self.nDisplayedPane][1]
+		strZoneName = L[ ktPaneData[self.nDisplayedPane][1] ]
 	end
 	
 	-- Build zone list
@@ -1717,13 +1733,13 @@ function AMPFinder:UpdatePane(nZoneId)
 		local idZone = arZoneList[idx]
 		wndCurr:SetData(idZone)
 		if (idZone == 0) then
-			wndCurr:SetText("(current zone)")
+			wndCurr:SetText(L["PaneCurrentZone"])
 		else
 			if (idZone == tZoneInfo.id) then
-				wndCurr:SetText("( "..ktPaneData[idZone][1].." )")
+				wndCurr:SetText("( "..L[ ktPaneData[idZone][1] ].." )")
 				wndCurr:SetStyleEx("UseWindowTextColor",true)
 			else
-				wndCurr:SetText(ktPaneData[idZone][1])
+				wndCurr:SetText(L[ ktPaneData[idZone][1] ])
 				wndCurr:SetStyleEx("UseWindowTextColor",false)
 			end
 		end
@@ -1847,7 +1863,7 @@ function AMPFinder:UpdatePane(nZoneId)
 
 	else -- current zone is not in the list
 	
-		self.wndMain:FindChild("AMP_Info"):SetText("No AMP info found for current zone.")				
+		self.wndMain:FindChild("AMP_Info"):SetText(L["NoInfoForCurrentZone"])
 		self.wndMain:FindChild("AMP_Info"):DestroyChildren()
 		self.bPosTracking = false
 		self:HookPosTrack(false)
@@ -1884,8 +1900,10 @@ end
 function AMPFinder:AddConditionVendor(wndParent, nTop, nVendorTag)
 	local tVendorData = self.LocationToVendor[nVendorTag][1]
 	local wndCurr = Apollo.LoadForm(self.xmlDoc, "Condition", wndParent, self)
-	wndParent:FindChild("AddInfo"):SetText(tVendorData[2].."\n("..round(tVendorData[3])..","..round(tVendorData[4])..")")
-	wndCurr:FindChild("ConditionField"):SetText(tVendorData[5])
+	-- todo: localize vendor data
+	wndParent:FindChild("AddInfo"):SetText(L[ tVendorData[2] ].."\n("..round(tVendorData[3])..","..round(tVendorData[4])..")")
+	-- todo: localize vendor name
+	wndCurr:FindChild("ConditionField"):SetText(L[ tVendorData[5] ])
 	wndCurr:FindChild("ConditionField"):SetFont("CRB_InterfaceMedium_BO")
 	wndCurr:SetAnchorOffsets(0, nTop, 0, nTop+25)
 	wndCurr:SetData({knCondVendor, nVendorTag})
@@ -1895,13 +1913,15 @@ end
 function AMPFinder:AddConditionQuestgiver(wndParent, nTop, nVendorTag, nZoneTag)
 	local tVendorData = self.LocationToVendor[nVendorTag][1]
 	local tEp = ktEpisodeInfo[nZoneTag]
-	local ep, strQgiver, strQline, q1, q2, q3 = tEp[kiEpisodeNum], tEp[kiEpisodeQuestgiver], tEp[kiEpisodeName],
+	local ep, strQgiver, strQline, q1, q2, q3 = tEp[kiEpisodeNum], L[ tEp[kiEpisodeQuestgiver] ], L[ tEp[kiEpisodeName] ],
 		tEp[kiEpisodeQuest1], tEp[kiEpisodeQuest2], tEp[kiEpisodeQuest3]
 		
 	local wndCurr = Apollo.LoadForm(self.xmlDoc, "Condition", wndParent, self)
-	wndParent:FindChild("AddInfo"):SetText(tVendorData[2].."\n("..round(tVendorData[3])..","..round(tVendorData[4])..")")
-	wndCurr:FindChild("ConditionField"):SetText("Quests from "..strQgiver)
-	wndCurr:FindChild("ConditionField"):SetTooltip("Questline begins with this questgiver.")
+	-- TODO: localize questgiver data
+	wndParent:FindChild("AddInfo"):SetText(L[tVendorData[2]].."\n("..round(tVendorData[3])..","..round(tVendorData[4])..")")
+	-- TODO: Localize questgiver name too
+	wndCurr:FindChild("ConditionField"):SetText(L["QuestsFrom"]..strQgiver)
+	wndCurr:FindChild("ConditionField"):SetTooltip(L["QuestgiverTip"])
 	wndCurr:FindChild("ConditionField"):SetFont("CRB_InterfaceMedium_BO")
 	wndCurr:SetAnchorOffsets(0, nTop, 0, nTop+25)
 	wndCurr:SetData({knCondQuestgiver, nVendorTag})
@@ -1927,11 +1947,12 @@ end
 function AMPFinder:AddConditionQuest(wndParent, nTop, nEpId, nQuestId)
 	local strQName = karEpisodeTitles[nQuestId]
 	if (strQName == nil) then return nTop end
+	strQName = L[ strQName ]
 	local wndCurr = Apollo.LoadForm(self.xmlDoc, "Condition", wndParent, self)
 	wndCurr:FindChild("ConditionField"):SetText("Quest: "..strQName)
 	wndCurr:SetAnchorOffsets(0, nTop, 0, nTop+25)
 	wndCurr:SetData({knCondQuest, nEpId, nQuestId})
-	wndCurr:SetTooltip("Complete all the quests for an AMP reward.")
+	wndCurr:SetTooltip(L["EpisodeTip"])
 	self:UpdateCondQuest(wndCurr)
 	return nTop+20
 end
@@ -1940,18 +1961,20 @@ function AMPFinder:AddConditionPrestige(nAmount, wndParent, nTop)
 	local wndCurr = Apollo.LoadForm(self.xmlDoc, "Condition", wndParent, self)
 	wndCurr:SetAnchorOffsets(0, nTop, 0, nTop+25)
 	wndCurr:SetData({knCondPrestige,nAmount})
-	wndCurr:SetTooltip("AMPs at this vendor can be purchased for Prestige.")
+	wndCurr:SetTooltip(L["PrestigeTip"])
 	self:UpdateCondPrestige(wndCurr)
 	return nTop+25
 end
 
 function AMPFinder:AddConditionReputation(wndParent, nTop, strGroupName)
 	local wndCurr = Apollo.LoadForm(self.xmlDoc, "Condition", wndParent, self)
+	strGroupName = L[strGroupName]
 	wndCurr:FindChild("ConditionField"):SetText(strGroupName..": "..
 		"0/8000")
 	wndCurr:SetAnchorOffsets(0, nTop, 0, nTop+25)
+	-- TODO: When setting data, make sure to use the localized reputation name
 	wndCurr:SetData({knCondReputation, strGroupName})
-	wndCurr:SetTooltip("Complete quests in this zone\nto achieve a Popular reputation.")
+	wndCurr:SetTooltip(L["PopularityTip"])
 	self:UpdateCondReputation(wndCurr)
 	return nTop+25
 end
@@ -1967,23 +1990,44 @@ function AMPFinder:AddConditionAMP(wndParent, nTop, sAmpName, nSpellId, nLoc, qu
 	if (self.nCompleteDisplayMode == 1) and (wndParent:GetName() == "AmpGenericForm") then
 	
 		if (nLoc == nil) or (nLoc == knLocUnknown) then
-			wndRank:SetText("World drop")
+			wndRank:SetText(L["LocWorldDrop"])
 		elseif (nLoc == knLocAutolearned) then
-			wndRank:SetText("Auto-learned")
+			wndRank:SetText(L["LocAutoLearned"])
 		elseif (nLoc == knLocQuest) then
-			wndRank:SetText("Quest reward")
+			wndRank:SetText(L["LocQuestReward"])
 		elseif (nLoc == knLocGallowSylvan) then
-			wndRank:SetText(self.LocationToVendor[knLocGallow][1][1].."/"..self.LocationToVendor[knLocSylvan][1][1])
+			-- TODO: localize zone names
+			wndRank:SetText(L[ self.LocationToVendor[knLocGallow][1][1] ].."/"
+				..L[ self.LocationToVendor[knLocSylvan][1][1] ])
 		elseif (self.LocationToVendor[nLoc] ~= nil) then
-			wndRank:SetText(self.LocationToVendor[nLoc][1][1])
+			-- TODO: localize zone name
+			wndRank:SetText(L[ self.LocationToVendor[nLoc][1][1] ])
 		else
 			wndRank:SetText("")
 		end
+	
+	elseif (self.nCompleteDisplayMode == 2) and (wndParent:GetName() == "AmpGenericForm") then
 		
+		if (nLoc == nil) or (nLoc == knLocUnknown) then
+			wndRank:SetText(L["LocWorldDrop"])
+		elseif (nLoc == knLocAutolearned) then
+			wndRank:SetText(L["LocAutoLearned"])
+		elseif (nLoc == knLocQuest) then
+			wndRank:SetText(L["LocQuestReward"])
+		elseif (nLoc == knLocFCON) then
+			wndRank:SetText(L["PricePrestige"]) -- TODO: Price
+		elseif (nLoc == knLocGallowSylvan) then
+			wndRank:SetText(L["PriceGold"]) -- TODO: Price
+		elseif (self.LocationToVendor[nLoc] ~= nil) then
+			wndRank:SetText(L["PriceGold"]) -- TODO: Price
+		else
+			wndRank:SetText("")
+		end
+	
 	else
 		local tRecord = AllAmpData[self.nClassDisplayed][nSpellId] -- AllAmpData[nPane][nSpellId]
 		strWedgeName = karCategoryToConstantData[ tRecord[kiAmpCategory] ][3]
-		wndRank:SetText(strWedgeName.." R"..tRecord[kiAmpRank])		
+		wndRank:SetText(String_GetWeaselString(L["RankShort"], strWedgeName, tRecord[kiAmpRank]))	
 	end
 	
 	if (self.nClass == self.nClassDisplayed) then
@@ -1995,7 +2039,7 @@ function AMPFinder:AddConditionAMP(wndParent, nTop, sAmpName, nSpellId, nLoc, qu
 	wndCurr:SetAnchorOffsets(0, nTop, 0, nTop+18)
 	
 	if (questTooltip) then
-		wndCurr:SetTooltip("Quest rewards these amps.\nCan also be dropped\nby enemies or bought on\nthe Commodities Exchange.")
+		wndCurr:SetTooltip(L["RewardTip"])
 	end
 	
 	if (self.nClass == self.nClassDisplayed) then
@@ -2016,8 +2060,8 @@ function AMPFinder:AddConditionAMPs(loc1, loc2, wndVend, nTop, questTooltip)
 	
 	if (self.nClass ~= self.nClassDisplayed) then
 		local wndCurr = Apollo.LoadForm(self.xmlDoc, "Condition", wndVend, self)
-		wndCurr:FindChild("ConditionField"):SetText(
-			karClassNames[self.nClassDisplayed].." AMPs:")
+		wndCurr:FindChild("ConditionField"):SetText(String_GetWeaselString(L["NotMyClassHeader"],
+			karClassNames[self.nClassDisplayed]))
 		wndCurr:FindChild("ConditionField"):SetTextColor("UI_TextHoloBodyHighlight")
 		wndCurr:FindChild("Image"):SetSprite(nil)
 		wndCurr:SetAnchorOffsets(0, nTop, 0, nTop+25)
@@ -2146,7 +2190,7 @@ function AMPFinder:UpdateArrowVendor(bForceUpdate) -- (wndVendor, wndParent)
 	end
 	
 	if (bComplete) then
-		wndParent:SetTooltip("Purchased all AMPs from vendor")
+		wndParent:SetTooltip(L["PurchasedAllAmps"])
 		wndParent:FindChild("ConditionField"):SetTextColor("UI_WindowTextTextPureGreen")
 		wndParent:FindChild("Image"):SetSprite("CRB_Basekit:kitIcon_Holo_Checkmark")
 		
@@ -2159,16 +2203,16 @@ function AMPFinder:UpdateArrowVendor(bForceUpdate) -- (wndVendor, wndParent)
 		local tZoneInfo = GameLib.GetCurrentZoneMap()
 		
 		if (tZoneInfo == nil) or (tZoneInfo.id ~= math.abs(self.nDisplayedPane)) then
-			strShownZoneName = ktPaneData[self.nDisplayedPane][1]
+			strShownZoneName = L[ ktPaneData[self.nDisplayedPane][1] ]
 	
 			wndArrow:SetTextFlags("DT_CENTER", true)
 			wndArrow:SetTextFlags("DT_VCENTER", true)
 			wndArrow:SetTextFlags("DT_WORDBREAK", true)
 
 			if (bComplete) then
-				wndArrow:SetText("Purchased all AMPs from vendor")
+				wndArrow:SetText(L["PurchasedAllAmps"])
 			else
-				wndArrow:SetText("Travel to "..strShownZoneName)
+				wndArrow:SetText(String_GetWeaselString(L["TravelTo"], strShownZoneName))
 			end
 			return
 			
@@ -2197,8 +2241,9 @@ function AMPFinder:UpdateArrowVendor(bForceUpdate) -- (wndVendor, wndParent)
 		if (tVendorData == nil) then return end  -- bugcheck
 		
 		-- TODO: Cache text changes so we aren't changing the vendor constantly
-		wndVendor:FindChild("AddInfo"):SetText(tVendorData[2].."\n("..round(tVendorData[3])..","..round(tVendorData[4])..")")
-		wndParent:FindChild("ConditionField"):SetText(tVendorData[5]);
+		-- TODO: Localize subzone name
+		wndVendor:FindChild("AddInfo"):SetText(L[tVendorData[2]].."\n("..round(tVendorData[3])..","..round(tVendorData[4])..")")
+		wndParent:FindChild("ConditionField"):SetText(L[tVendorData[5]]);
 			
 		local strSpriteName
 		if (distance < 5) then
@@ -2247,7 +2292,7 @@ function AMPFinder:UpdateArrowQuestgiver(bForceUpdate) -- (wndVendor, wndParent)
 
 	if (bComplete) then
 		wndParent:FindChild("ConditionField"):SetTextColor("UI_WindowTextTextPureGreen")
-		wndParent:FindChild("ConditionField"):SetTooltip("Questline complete. You'll need to look elsewhere for these amps.")
+		wndParent:FindChild("ConditionField"):SetTooltip(L["NoMoreRewards"])
 		wndParent:FindChild("Image"):SetSprite("CRB_Basekit:kitIcon_Holo_Checkmark")
 	end
 	
@@ -2257,15 +2302,15 @@ function AMPFinder:UpdateArrowQuestgiver(bForceUpdate) -- (wndVendor, wndParent)
 		local tZoneInfo = GameLib.GetCurrentZoneMap()
 		
 		if (tZoneInfo == nil) or (tZoneInfo.id ~= math.abs(self.nDisplayedPane)) then
-			strShownZoneName = ktPaneData[self.nDisplayedPane][1]
+			strShownZoneName = L[ ktPaneData[self.nDisplayedPane][1] ]
 	
 			wndArrow:SetTextFlags("DT_CENTER", true)
 			wndArrow:SetTextFlags("DT_VCENTER", true)
 			wndArrow:SetTextFlags("DT_WORDBREAK", true)
 			if (bComplete) then
-				wndArrow:SetText("Obtained AMP reward")
+				wndArrow:SetText(L["ObtainedReward"])
 			else
-				wndArrow:SetText("Travel to "..strShownZoneName)
+				wndArrow:SetText(String_GetWeaselString(L["TravelTo"], strShownZoneName))
 			end
 			return
 			

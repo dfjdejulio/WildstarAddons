@@ -631,6 +631,7 @@ function NeighborNotes:UpdateNode(tUnitNames)
 		end
 	end
 	if nBest ~= 0 then
+		Print("Found Node: " .. self.tLiveData.tNodes[nBest])	
 		if self.tRealm.tNeighborList[self.tLiveData.strNeighborName] == nil then
 			self.tRealm.tNeighborList[self.tLiveData.strNeighborName] = {}
 		end
@@ -666,9 +667,12 @@ function NeighborNotes:UpdatePlugs(tUnitNames)
 	end	
 	self.tRealm.tNeighborList[self.tLiveData.strNeighborName].tPlugs = {}
 	if nCount > 0 then
+		local strPlugs = ""
 		for nPlugID, nNum in pairs(tNewPlugs) do
 			table.insert(self.tRealm.tNeighborList[self.tLiveData.strNeighborName].tPlugs, nPlugID)
+			strPlugs = strPlugs .. " " .. self.tLiveData.tPlugs[nPlugID]
 		end
+		Print("Found Plugs:" .. strPlugs)
 		table.sort(self.tRealm.tNeighborList[self.tLiveData.strNeighborName].tPlugs)		
 	end
 end

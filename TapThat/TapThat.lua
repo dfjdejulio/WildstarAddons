@@ -26,7 +26,7 @@ CSITypeEnumerationLookupTable[CSIsLib.ClientSideInteractionType_Memory] = "Memor
 CSITypeEnumerationLookupTable[CSIsLib.ClientSideInteractionType_Keypad] = "Keypad"  --??? Needs a database of entry codes?
 CSITypeEnumerationLookupTable[CSIsLib.ClientSideInteractionType_RapidTappingInverse] = "RapidTappingInverse"  --Done
 
-local sVersion = "1.8.2"
+local sVersion = "1.8.3"
 -----------------------------------------------------------------------------------------------
 -- Locals
 -----------------------------------------------------------------------------------------------

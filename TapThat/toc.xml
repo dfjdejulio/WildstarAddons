@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Addon Author="legowxelab2z8" APIVersion="8" Name="TapThat" Description="Completes CSI events such as Rapid Tap, Metronome, and Memory automatically.">
+<Addon Author="legowxelab2z8" APIVersion="9" Name="TapThat" Description="Completes CSI events such as Rapid Tap, Metronome, and Memory automatically.">
     <Script Name="TapThat.lua"/>
     <Form Name="TapThat.xml"/>
 </Addon>
